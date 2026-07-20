@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CHAKRAVYUH — National Cyber-Interdiction Grid</title>
+<style>
+  :root{
+    --bg:#0B1026; --bg2:#0E1533; --panel:#111A3D; --panel2:#0d1430;
+    --ink:#E8ECFF; --muted:#8790BE; --line:#232C55;
+    --saffron:#FF9933; --gold:#FFC94D; --alarm:#FF5A5A;
+    --safe:#37D6A0; --life:#46C8E6; --dim:#3A4570;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 700px at 70% -10%, #14204d 0%, var(--bg) 55%) fixed;
+    color:var(--ink);
+    font-family:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    -webkit-font-smoothing:antialiased;
+  }
+  .eyebrow{font:600 11px/1.4 system-ui;letter-spacing:.28em;text-transform:uppercase;color:var(--saffron)}
+  h1{font:700 30px/1 system-ui;letter-spacing:.02em;margin:.15em 0 0}
+  .app{display:grid;grid-template-rows:auto 1fr auto;height:100vh;gap:1px}
+  /* ---- top bar ---- */
+  .topbar{display:flex;align-items:center;justify-content:space-between;
+    padding:16px 22px;border-bottom:1px solid var(--line);background:linear-gradient(var(--bg2),transparent)}
+  .status{display:flex;gap:18px;align-items:center;font:500 12px system-ui;color:var(--muted)}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:7px;background:var(--safe);box-shadow:0 0 10px var(--safe)}
+  .dot.live{background:var(--saffron);box-shadow:0 0 10px var(--saffron);animation:pulse 1.6s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  button{font:600 12px system-ui;letter-spacing:.04em;cursor:pointer;border-radius:8px;
+    border:1px solid var(--saffron);background:transparent;color:var(--saffron);padding:10px 16px;transition:.15s}
+  button:hover{background:var(--saffron);color:#1a1200}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  button.ghost{border-color:var(--line);color:var(--muted)}
+  button.ghost:hover{background:var(--line);color:var(--ink)}
+  button.approve{border-color:var(--life);color:var(--life)}
+  button.approve:hover{background:var(--life);color:#04222b}
+  /* ---- middle ---- */
+  .main{display:grid;grid-template-columns:300px 1fr 320px;gap:1px;overflow:hidden;min-height:0}
+  .rail{background:var(--panel2);padding:16px;overflow:auto}
+  .rail h2{font:600 10px/1 system-ui;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);margin:2px 0 14px}
+  .center{background:var(--bg);position:relative;display:flex;flex-direction:column;min-width:0}
+  svg{width:100%;height:100%;display:block}
+  /* stepper */
+  .beats{display:flex;gap:6px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .beat{font:600 10px system-ui;letter-spacing:.06em;color:var(--muted);border:1px solid var(--line);
+    border-radius:20px;padding:5px 11px;transition:.2s;white-space:nowrap}
+  .beat.on{color:var(--bg);background:var(--saffron);border-color:var(--saffron)}
+  .beat.done{color:var(--safe);border-color:var(--safe)}
+  /* feed */
+  .feed{display:flex;flex-direction:column;gap:8px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 12px;
+    opacity:0;transform:translateY(6px);transition:.35s}
+  .card.show{opacity:1;transform:none}
+  .card .k{font:600 10px system-ui;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .card .v{font-size:13px;margin-top:3px;word-break:break-word}
+  .sev{color:var(--alarm)}
+  .att{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .chip{font-size:11px;border:1px solid var(--alarm);color:var(--alarm);border-radius:6px;padding:4px 8px;
+    opacity:0;transition:.3s}
+  .chip.show{opacity:1}
+  .chip small{color:var(--muted);display:block;font-size:9px;letter-spacing:.08em}
+  /* interdiction card */
+  .idx{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .idx .title{font:600 11px system-ui;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+  .action{display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12px}
+  .action .tt{color:var(--saffron);font-weight:700}
+  .gate{font-size:9px;letter-spacing:.08em;border:1px solid var(--life);color:var(--life);border-radius:5px;padding:2px 6px;margin-left:auto;white-space:nowrap}
+  .auto{border-color:var(--safe);color:var(--safe)}
+  .bars{margin-top:14px}
+  .bar{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:11px}
+  .bar .lab{width:64px;color:var(--muted)}
+  .bar .track{flex:1;height:16px;background:var(--panel2);border-radius:4px;overflow:hidden}
+  .bar .fill{height:100%;width:0;transition:width 1s ease}
+  .bar .fill.smart{background:linear-gradient(90deg,var(--safe),#2ea)}
+  .bar .fill.naive{background:linear-gradient(90deg,var(--alarm),#c33)}
+  .bar .num{width:36px;text-align:right;font-weight:700}
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .metric{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px}
+  .metric .n{font:700 20px system-ui}
+  .metric .l{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+  .ok{color:var(--safe)} .bad{color:var(--alarm)}
+  /* bottom */
+  .bottom{background:var(--panel2);border-top:1px solid var(--line);display:grid;grid-template-rows:auto 1fr;max-height:230px}
+  .tabs{display:flex;gap:2px;padding:10px 16px 0}
+  .tab{font:600 11px system-ui;letter-spacing:.06em;color:var(--muted);padding:8px 14px;border:1px solid var(--line);
+    border-bottom:none;border-radius:8px 8px 0 0;cursor:pointer}
+  .tab.on{color:var(--ink);background:var(--panel);border-color:var(--line)}
+  .tabbody{overflow:auto;padding:14px 16px;background:var(--panel);margin:0 16px 14px;border:1px solid var(--line);border-radius:0 8px 8px 8px}
+  pre{margin:0;font-size:11px;line-height:1.5;color:#cdd6ff;white-space:pre-wrap}
+  .audit{font-size:11px;line-height:1.7}
+  .audit .h{color:var(--muted)}
+  .audit .seq{color:var(--saffron);font-weight:700}
+  .hash{color:#5b6bb0}
+  .banner{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:5;
+    background:rgba(255,90,90,.14);border:1px solid var(--alarm);color:#ffd0d0;
+    font:600 12px system-ui;letter-spacing:.04em;padding:8px 16px;border-radius:22px;opacity:0;transition:.4s}
+  .banner.show{opacity:1}
+  .banner.safe{background:rgba(55,214,160,.14);border-color:var(--safe);color:#c7ffe9}
+  .legend{position:absolute;right:14px;bottom:12px;font:500 10px system-ui;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:middle}
+  @media (max-width:920px){.main{grid-template-columns:1fr}.rail{display:none}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div>
+      <div class="eyebrow">National Cyber-Interdiction Grid · NCIIPC / CERT-In</div>
+      <h1>CHAKRAVYUH</h1>
+    </div>
+    <div class="status">
+      <span><span class="dot" id="statusDot"></span><span id="statusText">System nominal</span></span>
+      <span id="clock"></span>
+      <button class="ghost" id="replayBtn">Replay</button>
+      <button id="runBtn">Run interdiction ▶</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- LEFT -->
+    <div class="rail">
+      <h2>Agent feed</h2>
+      <div class="feed" id="feed"></div>
+      <h2 style="margin-top:20px">MITRE ATT&amp;CK</h2>
+      <div class="att" id="attStrip"></div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="center">
+      <div class="beats" id="beats"></div>
+      <div style="position:relative;flex:1;min-height:0">
+        <div class="banner" id="banner"></div>
+        <svg id="map" viewBox="0 0 640 520" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="legend">
+          <span><i style="background:var(--alarm)"></i>attacker</span>
+          <span><i style="background:var(--gold)"></i>crown jewel</span>
+          <span><i style="background:var(--life)"></i>protected lifeline</span>
+          <span><i style="background:var(--safe)"></i>contained</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="rail">
+      <h2>Interdiction plan</h2>
+      <div id="planHost"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM -->
+  <div class="bottom">
+    <div class="tabs">
+      <div class="tab on" data-tab="report">CERT-In 6-hour report</div>
+      <div class="tab" data-tab="audit">Audit trail</div>
+    </div>
+    <div class="tabbody" id="tabbody"><pre id="reportBody"></pre><div class="audit" id="auditBody" style="display:none"></div></div>
+  </div>
+</div>
+
+<script id="data" type="application/json">{
+  "scenario": {
+    "nodes": [
+      {
+        "id": "internet",
+        "sector": "internet",
+        "type": "internet",
+        "crown_jewel": false,
+        "ring": 0,
+        "ot": false,
+        "criticality": 1
+      },
+      {
+        "id": "it_jump_host",
+        "sector": "power",
+        "type": "it_server",
+        "crown_jewel": false,
+        "ring": 1,
+        "ot": false,
+        "criticality": 2
+      },
+      {
+        "id": "it_workstation",
+        "sector": "power",
+        "type": "it_host",
+        "crown_jewel": false,
+        "ring": 2,
+        "ot": false,
+        "criticality": 2
+      },
+      {
+        "id": "domain_controller",
+        "sector": "power",
+        "type": "it_server",
+        "crown_jewel": false,
+        "ring": 3,
+        "ot": false,
+        "criticality": 4
+      },
+      {
+        "id": "engineer_cred",
+        "sector": "power",
+        "type": "identity",
+        "crown_jewel": false,
+        "ring": 3,
+        "ot": false,
+        "criticality": 3
+      },
+      {
+        "id": "ot_historian",
+        "sector": "power",
+        "type": "ot_historian",
+        "crown_jewel": false,
+        "ring": 4,
+        "ot": true,
+        "criticality": 4
+      },
+      {
+        "id": "ot_scada_server",
+        "sector": "power",
+        "type": "ot_scada",
+        "crown_jewel": true,
+        "ring": 5,
+        "ot": true,
+        "criticality": 5
+      },
+      {
+        "id": "hospital_power_load",
+        "sector": "health",
+        "type": "service_load",
+        "crown_jewel": false,
+        "ring": 6,
+        "ot": false,
+        "criticality": 5
+      }
+    ],
+    "edges": [
+      {
+        "src": "internet",
+        "dst": "it_jump_host",
+        "exploit_cost": 2.0,
+        "cut_cost": 1.0,
+        "protected": false,
+        "action_type": "block_link"
+      },
+      {
+        "src": "it_jump_host",
+        "dst": "it_workstation",
+        "exploit_cost": 1.0,
+        "cut_cost": 1.0,
+        "protected": false,
+        "action_type": "isolate_host"
+      },
+      {
+        "src": "it_workstation",
+        "dst": "engineer_cred",
+        "exploit_cost": 1.0,
+        "cut_cost": 1.0,
+        "protected": false,
+        "action_type": "revoke_credential"
+      },
+      {
+        "src": "it_workstation",
+        "dst": "domain_controller",
+        "exploit_cost": 3.0,
+        "cut_cost": 6.0,
+        "protected": false,
+        "action_type": "isolate_host"
+      },
+      {
+        "src": "domain_controller",
+        "dst": "ot_historian",
+        "exploit_cost": 2.0,
+        "cut_cost": 1.0,
+        "protected": false,
+        "action_type": "block_link"
+      },
+      {
+        "src": "engineer_cred",
+        "dst": "ot_historian",
+        "exploit_cost": 1.0,
+        "cut_cost": 2.0,
+        "protected": false,
+        "action_type": "revoke_credential"
+      },
+      {
+        "src": "ot_historian",
+        "dst": "ot_scada_server",
+        "exploit_cost": 2.0,
+        "cut_cost": 8.0,
+        "protected": false,
+        "action_type": "block_link"
+      },
+      {
+        "src": "ot_scada_server",
+        "dst": "hospital_power_load",
+        "exploit_cost": 99.0,
+        "cut_cost": 100.0,
+        "protected": true,
+        "action_type": "block_link"
+      }
+    ],
+    "crown_jewel": "ot_scada_server",
+    "hospital": "hospital_power_load",
+    "frontier": [
+      "it_jump_host",
+      "it_workstation",
+      "engineer_cred"
+    ],
+    "predicted_next": [
+      "ot_historian"
+    ]
+  },
+  "result": {
+    "incident_id": "INC-0001",
+    "anomalies": [
+      {
+        "ts": "2026-07-20T05:01:45.909768Z",
+        "asset_id": "it_jump_host",
+        "score": 0.82,
+        "kind": "auth",
+        "detail": "behavioural deviation on it_jump_host"
+      },
+      {
+        "ts": "2026-07-20T05:01:45.909771Z",
+        "asset_id": "it_workstation",
+        "score": 0.78,
+        "kind": "auth",
+        "detail": "behavioural deviation on it_workstation"
+      },
+      {
+        "ts": "2026-07-20T05:01:45.909776Z",
+        "asset_id": "engineer_cred",
+        "score": 0.85,
+        "kind": "auth",
+        "detail": "behavioural deviation on engineer_cred"
+      }
+    ],
+    "techniques": [
+      {
+        "technique_id": "T1078",
+        "technique_name": "Valid Accounts",
+        "tactic": "Initial Access",
+        "confidence": 0.82,
+        "asset_id": "it_jump_host"
+      },
+      {
+        "technique_id": "T1021",
+        "technique_name": "Remote Services",
+        "tactic": "Lateral Movement",
+        "confidence": 0.78,
+        "asset_id": "it_workstation"
+      },
+      {
+        "technique_id": "T1003",
+        "technique_name": "OS Credential Dumping",
+        "tactic": "Credential Access",
+        "confidence": 0.85,
+        "asset_id": "engineer_cred"
+      }
+    ],
+    "attacker_frontier": [
+      "it_jump_host",
+      "it_workstation",
+      "engineer_cred"
+    ],
+    "cascade": {
+      "incident_id": "INC-0001",
+      "threatened_crown_jewels": [
+        "ot_scada_server"
+      ],
+      "dependent_loads_at_risk": [
+        "hospital_power_load"
+      ],
+      "cross_sector": true,
+      "narrative": "Attacker can reach crown jewel(s) ['ot_scada_server']. Compromise or naive isolation would jeopardise dependent load(s) ['hospital_power_load'] across sectors."
+    },
+    "interdiction": {
+      "actions": [
+        {
+          "action_type": "revoke_credential",
+          "target": "engineer_cred",
+          "reversible": true,
+          "est_disruption": 2.0,
+          "requires_human_gate": false,
+          "rationale": "block attacker move engineer_cred -> ot_historian"
+        },
+        {
+          "action_type": "block_link",
+          "target": [
+            "domain_controller",
+            "ot_historian"
+          ],
+          "reversible": true,
+          "est_disruption": 1.0,
+          "requires_human_gate": true,
+          "rationale": "block attacker move domain_controller -> ot_historian"
+        }
+      ],
+      "attacker_cost_before": 3.0,
+      "attacker_cost_after": null,
+      "availability_cost": 3.0,
+      "baseline_availability_cost": 108.0,
+      "crown_jewel_protected": true,
+      "cascade_averted": true,
+      "notes": "min-cost cut of 2 edge(s); naive baseline would cost 108.0 and WOULD sever a protected cross-sector dependency."
+    },
+    "executions": [
+      {
+        "action": {
+          "action_type": "revoke_credential",
+          "target": "engineer_cred",
+          "reversible": true,
+          "est_disruption": 2.0,
+          "requires_human_gate": false,
+          "rationale": "block attacker move engineer_cred -> ot_historian"
+        },
+        "executed": true,
+        "gated": false,
+        "approved_by": null,
+        "error": null,
+        "ts": "2026-07-20T05:01:45.912254Z"
+      },
+      {
+        "action": {
+          "action_type": "block_link",
+          "target": [
+            "domain_controller",
+            "ot_historian"
+          ],
+          "reversible": true,
+          "est_disruption": 1.0,
+          "requires_human_gate": true,
+          "rationale": "block attacker move domain_controller -> ot_historian"
+        },
+        "executed": true,
+        "gated": true,
+        "approved_by": "analyst:demo",
+        "error": null,
+        "ts": "2026-07-20T05:01:45.912293Z"
+      }
+    ],
+    "metrics": {
+      "mttd_steps": 3,
+      "mttr_steps": 2
+    },
+    "audit": {
+      "ok": true,
+      "records": [
+        {
+          "seq": 0,
+          "ts": "2026-07-20T05:01:45.909814Z",
+          "actor": "detection",
+          "event_type": "anomalies_detected",
+          "payload": {
+            "count": 3,
+            "assets": [
+              "it_jump_host",
+              "it_workstation",
+              "engineer_cred"
+            ]
+          },
+          "prev_hash": "",
+          "hash": "687bfd0a725ac49fdb8d335d350c42de538acb1594f8611a345037f1de396f9c"
+        },
+        {
+          "seq": 1,
+          "ts": "2026-07-20T05:01:45.909954Z",
+          "actor": "attribution",
+          "event_type": "attack_attributed",
+          "payload": {
+            "techniques": [
+              "T1078",
+              "T1021",
+              "T1003"
+            ],
+            "frontier": [
+              "it_jump_host",
+              "it_workstation",
+              "engineer_cred"
+            ]
+          },
+          "prev_hash": "687bfd0a725ac49fdb8d335d350c42de538acb1594f8611a345037f1de396f9c",
+          "hash": "6a5e0b22a142b9000d7665fd0d761e62c0343caa267a6c22998727dad1c96da0"
+        },
+        {
+          "seq": 2,
+          "ts": "2026-07-20T05:01:45.910457Z",
+          "actor": "cascade",
+          "event_type": "cascade_assessed",
+          "payload": {
+            "threatened": [
+              "ot_scada_server"
+            ],
+            "loads_at_risk": [
+              "hospital_power_load"
+            ],
+            "cross_sector": true
+          },
+          "prev_hash": "6a5e0b22a142b9000d7665fd0d761e62c0343caa267a6c22998727dad1c96da0",
+          "hash": "071bcba0c275d759293f0f057d8045ba6c8e8e71c1ed13994df785167778dfcb"
+        },
+        {
+          "seq": 3,
+          "ts": "2026-07-20T05:01:45.912160Z",
+          "actor": "interdiction",
+          "event_type": "plan_computed",
+          "payload": {
+            "actions": [
+              "revoke_credential",
+              "block_link"
+            ],
+            "availability_cost": 3.0,
+            "baseline_cost": 108.0,
+            "crown_jewel_protected": true,
+            "cascade_averted": true
+          },
+          "prev_hash": "071bcba0c275d759293f0f057d8045ba6c8e8e71c1ed13994df785167778dfcb",
+          "hash": "2505b2a352decefc7d07b39fee547999681991d9518459cd7fc81845855efd2d"
+        },
+        {
+          "seq": 4,
+          "ts": "2026-07-20T05:01:45.912219Z",
+          "actor": "response",
+          "event_type": "action_intent",
+          "payload": {
+            "action": "revoke_credential",
+            "target": "engineer_cred",
+            "gated": false
+          },
+          "prev_hash": "2505b2a352decefc7d07b39fee547999681991d9518459cd7fc81845855efd2d",
+          "hash": "e5825a01e815a7690508e789ad4f0fff877bc92333004f31d113918ec05820c0"
+        },
+        {
+          "seq": 5,
+          "ts": "2026-07-20T05:01:45.912260Z",
+          "actor": "response",
+          "event_type": "action_result",
+          "payload": {
+            "action": "revoke_credential",
+            "executed": true,
+            "gated": false,
+            "approved_by": null
+          },
+          "prev_hash": "e5825a01e815a7690508e789ad4f0fff877bc92333004f31d113918ec05820c0",
+          "hash": "adbdc6561574ce6b9bfed35f0dd6a6736ffeb331a842b5e975905e45d2bc7a79"
+        },
+        {
+          "seq": 6,
+          "ts": "2026-07-20T05:01:45.912275Z",
+          "actor": "response",
+          "event_type": "action_intent",
+          "payload": {
+            "action": "block_link",
+            "target": "('domain_controller', 'ot_historian')",
+            "gated": true
+          },
+          "prev_hash": "adbdc6561574ce6b9bfed35f0dd6a6736ffeb331a842b5e975905e45d2bc7a79",
+          "hash": "870a7882b7365e4f5729554423eeb83b3be432f5fb9629c0dd2fe24bd48bc9ae"
+        },
+        {
+          "seq": 7,
+          "ts": "2026-07-20T05:01:45.912299Z",
+          "actor": "response",
+          "event_type": "action_result",
+          "payload": {
+            "action": "block_link",
+            "executed": true,
+            "gated": true,
+            "approved_by": "analyst:demo"
+          },
+          "prev_hash": "870a7882b7365e4f5729554423eeb83b3be432f5fb9629c0dd2fe24bd48bc9ae",
+          "hash": "f0ec348982374f2147613559b53ea252f5e7954abc80746ae0bea518ec7bfc33"
+        },
+        {
+          "seq": 8,
+          "ts": "2026-07-20T05:01:45.912338Z",
+          "actor": "compliance",
+          "event_type": "certin_report_drafted",
+          "payload": {
+            "incident_id": "INC-0001"
+          },
+          "prev_hash": "f0ec348982374f2147613559b53ea252f5e7954abc80746ae0bea518ec7bfc33",
+          "hash": "2c1e5753979694a61fd315a3e6abd72571735d7757a80d90d7bfb8b4ab27e97e"
+        }
+      ]
+    },
+    "certin_report": "CERT-In INCIDENT REPORT (DRAFT - auto-generated, pending analyst review)\n=======================================================================\nGenerated (UTC): 2026-07-20T05:01:45.912318+00:00\nIncident ID: INC-0001\n\n1. Nature of incident: Unauthorised network intrusion / lateral movement\n   toward a Protected System (Section 70A).\n2. Affected sector(s): Power (Critical Information Infrastructure) + Health (cross-sector dependency).\n3. Observed adversary techniques (MITRE ATT&CK): T1078 (Valid Accounts), T1021 (Remote Services), T1003 (OS Credential Dumping)\n4. Attacker frontier at detection: it_jump_host, it_workstation, engineer_cred\n5. Crown jewel(s) threatened: ot_scada_server\n6. Cross-sector cascade risk: YES - hospital_power_load\n7. Containment actions taken:\n  - revoke_credential -> engineer_cred (disruption=2.0, gated=False)\n  - block_link -> ('domain_controller', 'ot_historian') (disruption=1.0, gated=True)\n8. Crown jewel protected after containment: True\n9. Cascade averted: True\n10. Operational disruption (availability cost): 3.0\n    (naive baseline would have cost 108.0)\n\nNOTE: Report timestamps must be NTP-synchronised (NIC/NPL) and logs retained\nin India for 180 days per the CERT-In Directions, 2022.\n"
+  }
+}</script>
+<script>
+const DATA = JSON.parse(document.getElementById('data').textContent);
+const S = DATA.scenario, R = DATA.result, I = R.interdiction;
+const cut = new Set(I.actions.map(a => Array.isArray(a.target) ? a.target.join('>') : a.target));
+const cutEdges = new Set(I.actions.filter(a=>Array.isArray(a.target)).map(a=>a.target.join('>')));
+const revoked = new Set(I.actions.filter(a=>!Array.isArray(a.target)).map(a=>a.target));
+
+/* ---------- layout: concentric chakravyuh rings ---------- */
+const CX=320, CY=250;
+const ringRadius={0:220,1:180,2:140,3:100,4:56,5:0,6:120};
+const spiral=r=>(-90 + r*52)*Math.PI/180;
+const pos={};
+S.nodes.forEach(n=>{
+  if(n.id===S.hospital){ pos[n.id]={x:CX+150,y:CY+40}; return; }
+  let ang=spiral(n.ring), rad=ringRadius[n.ring]??0;
+  // ring 3 has two nodes -> fan them apart
+  const ringPeers=S.nodes.filter(m=>m.ring===n.ring&&m.id!==S.hospital);
+  if(ringPeers.length>1){ const i=ringPeers.findIndex(m=>m.id===n.id); ang += (i-(ringPeers.length-1)/2)*0.7; }
+  pos[n.id]={x:CX+rad*Math.cos(ang), y:CY+rad*Math.sin(ang)};
+});
+
+const svg=document.getElementById('map');
+const NS='http://www.w3.org/2000/svg';
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+
+/* concentric ring guides (the formation) */
+[220,180,140,100,56].forEach((r,i)=>{
+  svg.appendChild(el('circle',{cx:CX,cy:CY,r,fill:'none',stroke:'#FF9933',
+    'stroke-opacity':0.07+i*0.012,'stroke-width':1}));
+});
+
+/* edges */
+const edgeEls={};
+S.edges.forEach(e=>{
+  const p1=pos[e.src], p2=pos[e.dst]; if(!p1||!p2)return;
+  const key=e.src+'>'+e.dst;
+  const line=el('line',{x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,
+    stroke:e.protected?'var(--life)':'#2b356b',
+    'stroke-width':e.protected?2.2:1.6,
+    'stroke-dasharray':e.protected?'5 5':'none','stroke-linecap':'round'});
+  svg.appendChild(line); edgeEls[key]=line;
+});
+
+/* nodes */
+const nodeEls={};
+S.nodes.forEach(n=>{
+  const p=pos[n.id]; const g=el('g',{});
+  const rad=n.crown_jewel?17:(n.id===S.hospital?14:11);
+  const c=el('circle',{cx:p.x,cy:p.y,r:rad,fill:'#0d1430',
+    stroke:n.crown_jewel?'var(--gold)':(n.id===S.hospital?'var(--life)':'#46508f'),
+    'stroke-width':n.crown_jewel?2.5:1.6});
+  const label=el('text',{x:p.x,y:p.y+rad+13,'text-anchor':'middle',
+    fill:'#9aa4d8','font-size':'9.5','font-family':'ui-monospace,monospace'});
+  label.textContent=n.id.replace(/_/g,' ');
+  g.appendChild(c); g.appendChild(label); svg.appendChild(g);
+  nodeEls[n.id]={circle:c,label,node:n,pos:p};
+  if(n.crown_jewel){const t=el('text',{x:p.x,y:p.y+3,'text-anchor':'middle',fill:'var(--gold)','font-size':'9','font-weight':'700'});t.textContent='◆';g.appendChild(t);}
+});
+
+/* ---------- beats ---------- */
+const BEATS=['1 · Detect','2 · Attribute','3 · Cascade','4 · Interdict','5 · Contain','6 · Report'];
+const beatsHost=document.getElementById('beats');
+BEATS.forEach((b,i)=>{const d=document.createElement('div');d.className='beat';d.id='beat'+i;d.textContent=b;beatsHost.appendChild(d);});
+function setBeat(i){for(let k=0;k<BEATS.length;k++){const e=document.getElementById('beat'+k);e.className='beat'+(k<i?' done':k===i?' on':'');}}
+
+function feedCard(k,v,sev){const c=document.createElement('div');c.className='card';
+  c.innerHTML=`<div class="k">${k}</div><div class="v ${sev?'sev':''}">${v}</div>`;
+  document.getElementById('feed').appendChild(c);requestAnimationFrame(()=>c.classList.add('show'));}
+
+function glowNode(id,color){const n=nodeEls[id];if(!n)return;n.circle.setAttribute('stroke',color);
+  n.circle.setAttribute('stroke-width','3');n.circle.style.filter=`drop-shadow(0 0 7px ${color})`;}
+function glowEdge(src,dst,color){const e=edgeEls[src+'>'+dst];if(!e)return;e.setAttribute('stroke',color);
+  e.setAttribute('stroke-width','2.6');e.style.filter=`drop-shadow(0 0 5px ${color})`;}
+function severEdgeVisual(src,dst){const e=edgeEls[src+'>'+dst];if(!e)return;
+  e.setAttribute('stroke','#37424f');e.setAttribute('stroke-dasharray','3 6');e.style.filter='none';
+  const mx=(+e.getAttribute('x1')+ +e.getAttribute('x2'))/2, my=(+e.getAttribute('y1')+ +e.getAttribute('y2'))/2;
+  const t=el('text',{x:mx,y:my+4,'text-anchor':'middle',fill:'var(--safe)','font-size':'15','font-weight':'700'});
+  t.textContent='✂';t.style.filter='drop-shadow(0 0 6px var(--safe))';svg.appendChild(t);}
+
+function banner(txt,safe){const b=document.getElementById('banner');b.textContent=txt;
+  b.className='banner show'+(safe?' safe':'');}
+function status(txt,live){document.getElementById('statusText').textContent=txt;
+  document.getElementById('statusDot').className='dot'+(live?' live':'');}
+
+/* attack path order for animation */
+const PATH=[['internet','it_jump_host'],['it_jump_host','it_workstation'],['it_workstation','engineer_cred']];
+
+function reset(){
+  document.getElementById('feed').innerHTML='';
+  document.getElementById('attStrip').innerHTML='';
+  document.getElementById('planHost').innerHTML='';
+  document.getElementById('banner').className='banner';
+  document.querySelectorAll('svg text').forEach(t=>{if(t.textContent==='✂')t.remove();});
+  S.nodes.forEach(n=>{const e=nodeEls[n.id];e.circle.style.filter='';
+    e.circle.setAttribute('stroke',n.crown_jewel?'var(--gold)':(n.id===S.hospital?'var(--life)':'#46508f'));
+    e.circle.setAttribute('stroke-width',n.crown_jewel?2.5:1.6);});
+  S.edges.forEach(e=>{const l=edgeEls[e.src+'>'+e.dst];l.style.filter='';
+    l.setAttribute('stroke',e.protected?'var(--life)':'#2b356b');
+    l.setAttribute('stroke-width',e.protected?2.2:1.6);l.setAttribute('stroke-dasharray',e.protected?'5 5':'none');});
+  status('System nominal',false);setBeat(-1);
+}
+
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+let running=false;
+
+async function run(){
+  if(running)return; running=true; reset();
+  document.getElementById('runBtn').disabled=true;
+  status('Intrusion in progress',true);
+
+  /* Beat 1 detect */
+  setBeat(0);
+  for(const s of R.anomalies){ glowNode(s.asset_id,'var(--alarm)');
+    feedCard('Anomaly · '+s.asset_id.replace(/_/g,' '),
+      `behavioural score ${s.score.toFixed(2)} · no signature match`,true); await wait(650);}
+  await wait(300);
+
+  /* Beat 2 attribute */
+  setBeat(1);
+  const strip=document.getElementById('attStrip');
+  for(let i=0;i<R.techniques.length;i++){const t=R.techniques[i];
+    if(i<PATH.length) glowEdge(PATH[i][0],PATH[i][1],'var(--alarm)');
+    const chip=document.createElement('div');chip.className='chip';
+    chip.innerHTML=`${t.technique_id}<small>${t.technique_name}</small>`;strip.appendChild(chip);
+    requestAnimationFrame(()=>chip.classList.add('show'));await wait(600);}
+  feedCard('Attribution','Confirmed intrusion · lateral movement toward OT'); await wait(400);
+
+  /* Beat 3 cascade */
+  setBeat(2);
+  S.predicted_next.forEach(id=>glowEdge('engineer_cred',id,'#ff8a5a'));
+  glowNode(S.crown_jewel,'var(--alarm)');
+  const life=edgeEls[S.crown_jewel+'>'+S.hospital];life.style.filter='drop-shadow(0 0 8px var(--life))';life.setAttribute('stroke-width','3');
+  glowNode(S.hospital,'var(--life)');
+  banner('⚠ Cross-sector cascade predicted · grid loss → hospital power');
+  feedCard('Cascade · cross-sector',R.cascade.narrative,true); await wait(1300);
+
+  /* Beat 4 interdict */
+  setBeat(3);
+  renderPlan(); await wait(400);
+  banner('Interdiction ready · awaiting analyst approval for OT action');
+  status('Containment proposed',true);
+}
+
+function renderPlan(){
+  const host=document.getElementById('planHost');
+  const acts=I.actions.map(a=>{
+    const gated=a.requires_human_gate;
+    const tgt=Array.isArray(a.target)?a.target.join(' → '):a.target;
+    return `<div class="action"><span class="tt">${a.action_type.replace(/_/g,' ')}</span>
+      <span>${tgt}</span><span class="gate ${gated?'':'auto'}">${gated?'HUMAN GATE':'AUTONOMOUS'}</span></div>`;
+  }).join('');
+  const smart=I.availability_cost, naive=I.baseline_availability_cost;
+  const smartPct=Math.max(4,smart/naive*100), naivePct=100;
+  host.innerHTML=`
+   <div class="idx">
+     <div class="title">Minimal-disruption cut</div>
+     ${acts}
+     <div class="bars">
+       <div class="bar"><span class="lab">CHAKRAVYUH</span><span class="track"><span class="fill smart" id="fSmart"></span></span><span class="num ok">${smart}</span></div>
+       <div class="bar"><span class="lab">Naive</span><span class="track"><span class="fill naive" id="fNaive"></span></span><span class="num bad">${naive}</span></div>
+     </div>
+     <div style="font-size:10px;color:var(--muted);margin-top:8px">availability cost (lower is better). Naive "isolate everything" severs the hospital lifeline.</div>
+     <button class="approve" id="approveBtn" style="width:100%;margin-top:12px">✔ Approve &amp; contain</button>
+   </div>
+   <div class="metrics">
+     <div class="metric"><div class="n ok" id="mProt">—</div><div class="l">Crown jewel</div></div>
+     <div class="metric"><div class="n ok" id="mCasc">—</div><div class="l">Cascade</div></div>
+     <div class="metric"><div class="n" id="mMttd">${R.metrics.mttd_steps}</div><div class="l">MTTD steps</div></div>
+     <div class="metric"><div class="n" id="mMttr">${R.metrics.mttr_steps}</div><div class="l">MTTR actions</div></div>
+   </div>`;
+  setTimeout(()=>{document.getElementById('fSmart').style.width=smartPct+'%';
+    document.getElementById('fNaive').style.width=naivePct+'%';},80);
+  document.getElementById('approveBtn').addEventListener('click',contain);
+}
+
+async function contain(){
+  const b=document.getElementById('approveBtn');b.disabled=true;b.textContent='Containment executed';
+  setBeat(4);
+  /* sever cut edges */
+  cutEdges.forEach(k=>{const [s,d]=k.split('>');severEdgeVisual(s,d);});
+  revoked.forEach(id=>{ // revoked credential: dim its outward edges
+    S.edges.filter(e=>e.src===id).forEach(e=>severEdgeVisual(e.src,e.dst));
+    glowNode(id,'var(--safe)');});
+  S.predicted_next.forEach(id=>{const e=edgeEls['engineer_cred>'+id];if(e){e.style.filter='';e.setAttribute('stroke','#37424f');}});
+  await wait(500);
+  glowNode(S.crown_jewel,'var(--safe)'); glowNode(S.hospital,'var(--safe)');
+  document.getElementById('mProt').textContent=I.crown_jewel_protected?'SAFE':'AT RISK';
+  document.getElementById('mCasc').textContent=I.cascade_averted?'AVERTED':'—';
+  banner('✔ Attack contained · crown jewel safe · hospital power preserved',true);
+  status('Contained',false);document.getElementById('statusDot').className='dot';
+  /* Beat 6 report + audit */
+  await wait(500); setBeat(5);
+  document.getElementById('runBtn').disabled=false; running=false;
+}
+
+/* report + audit tabs */
+document.getElementById('reportBody').textContent=R.certin_report;
+const auditHost=document.getElementById('auditBody');
+auditHost.innerHTML=R.audit.records.map(r=>
+  `<div><span class="seq">#${r.seq}</span> <span class="h">${r.actor}·${r.event_type}</span> `+
+  `<span class="hash">${(r.hash||'').slice(0,16)}…</span></div>`).join('')+
+  `<div style="margin-top:8px;color:var(--safe)">chain verified: ${R.audit.ok} · ${R.audit.records.length} records</div>`;
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
+  const isR=t.dataset.tab==='report';
+  document.getElementById('reportBody').style.display=isR?'block':'none';
+  document.getElementById('auditBody').style.display=isR?'none':'block';}));
+
+/* clock */
+setInterval(()=>{document.getElementById('clock').textContent=new Date().toISOString().slice(11,19)+' UTC';},1000);
+
+document.getElementById('runBtn').addEventListener('click',run);
+document.getElementById('replayBtn').addEventListener('click',()=>{running=false;reset();});
+reset();
+if(matchMedia('(prefers-reduced-motion:reduce)').matches){/* leave static */}
+</script>
+</body>
+</html>

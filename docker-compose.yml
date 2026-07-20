@@ -1,0 +1,22 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # Optional LLM rationale (leave as 'none' to run fully offline):
+      - CHAKRAVYUH_LLM_PROVIDER=none
+      # - CHAKRAVYUH_LLM_PROVIDER=anthropic
+      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CHAKRAVYUH_ANOMALY_THRESHOLD=0.5
+    restart: unless-stopped
+
+  # Static command-centre dashboard (open http://localhost:8081)
+  dashboard:
+    image: python:3.12-slim
+    working_dir: /site
+    volumes:
+      - ./dashboard:/site:ro
+    command: python -m http.server 8081
+    ports:
+      - "8081:8081"

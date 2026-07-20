@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use CHAKRAVYUH in academic work, please cite it."
+title: "CHAKRAVYUH: Incident-Time Cross-Sector Attack-Path Interdiction for Critical National Infrastructure"
+version: 0.1.0
+date-released: 2026-07-19
+license: Apache-2.0
+authors:
+  - family-names: "CHAKRAVYUH contributors"
+keywords:
+  - cybersecurity
+  - critical infrastructure
+  - attack graph interdiction
+  - multi-agent systems
+  - MITRE ATT&CK
+repository-code: "https://github.com/your-org/chakravyuh"
