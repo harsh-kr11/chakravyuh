@@ -89,13 +89,35 @@ def build_graph() -> AttackGraph:
 
 
 # Scripted attacker progression that is DETECTED (the confirmed frontier),
-# ordered (asset reached, technique, score). We interdict here — *before* the
-# attacker reaches OT — so the optimiser can choose cheap upstream actions
-# instead of being forced onto the expensive, human-gated OT edge.
-ATTACK_STEPS: list[tuple[str, str, float]] = [
-    ("it_jump_host", "T1078", 0.82),      # valid accounts, initial foothold
-    ("it_workstation", "T1021", 0.78),    # remote services, lateral move
-    ("engineer_cred", "T1003", 0.85),     # credential dumping
+# ordered (asset reached, technique, behavioural features). We interdict here
+# — *before* the attacker reaches OT — so the optimiser can choose cheap
+# upstream actions instead of being forced onto the expensive, human-gated OT
+# edge. Feature vectors follow chakravyuh.ml.features.FEATURE_NAMES:
+# [off_hours, failed_logins_1h, new_asset_pair, bytes_out_zscore,
+#  process_count_zscore, privilege_level, session_duration_zscore] — no
+# attack signature is encoded, only behavioural signal fed to the
+# unsupervised UEBA model (see chakravyuh.ml). Anomaly scores are computed
+# by that model, not hardcoded (fallback: "anomaly_score" below, used only
+# if scikit-learn / the [detect] extra is not installed).
+ATTACK_STEPS: list[tuple[str, str, dict[str, float]]] = [
+    ("it_jump_host", "T1078", {   # valid accounts, initial foothold
+        "off_hours": 1, "failed_logins_1h": 1, "new_asset_pair": 1,
+        "bytes_out_zscore": 1.5, "process_count_zscore": 0.8,
+        "privilege_level": 0, "session_duration_zscore": 0.5,
+        "anomaly_score": 0.82,
+    }),
+    ("it_workstation", "T1021", {  # remote services, lateral move
+        "off_hours": 1, "failed_logins_1h": 1, "new_asset_pair": 1,
+        "bytes_out_zscore": 1.8, "process_count_zscore": 1.8,
+        "privilege_level": 1, "session_duration_zscore": 1.0,
+        "anomaly_score": 0.78,
+    }),
+    ("engineer_cred", "T1003", {  # credential dumping
+        "off_hours": 1, "failed_logins_1h": 4, "new_asset_pair": 1,
+        "bytes_out_zscore": 1.2, "process_count_zscore": 2.5,
+        "privilege_level": 2, "session_duration_zscore": 1.5,
+        "anomaly_score": 0.85,
+    }),
 ]
 
 # The attacker's *intended* next hop (predicted, not yet reached). Preempting
@@ -105,24 +127,34 @@ PREDICTED_NEXT: list[tuple[str, str]] = [
 ]
 
 # Benign noise events (should NOT be flagged): tests false-positive handling.
-BENIGN_EVENTS: list[tuple[str, float]] = [
-    ("it_workstation", 0.20),
-    ("domain_controller", 0.15),
+BENIGN_EVENTS: list[tuple[str, dict[str, float]]] = [
+    ("it_workstation", {
+        "off_hours": 0, "failed_logins_1h": 0, "new_asset_pair": 0,
+        "bytes_out_zscore": 0.2, "process_count_zscore": 0.1,
+        "privilege_level": 0, "session_duration_zscore": 0.1,
+        "anomaly_score": 0.20,
+    }),
+    ("domain_controller", {
+        "off_hours": 0, "failed_logins_1h": 0, "new_asset_pair": 0,
+        "bytes_out_zscore": 0.1, "process_count_zscore": 0.1,
+        "privilege_level": 0, "session_duration_zscore": 0.1,
+        "anomaly_score": 0.15,
+    }),
 ]
 
 
 def telemetry_stream() -> list[TelemetryEvent]:
     """Interleave benign noise with the malicious attack chain."""
     events: list[TelemetryEvent] = []
-    for asset_id, score in BENIGN_EVENTS:
+    for asset_id, features in BENIGN_EVENTS:
         events.append(TelemetryEvent(
             asset_id=asset_id, kind="auth",
-            features={"anomaly_score": score}, is_malicious=False,
+            features=dict(features), is_malicious=False,
         ))
-    for asset_id, technique, score in ATTACK_STEPS:
+    for asset_id, technique, features in ATTACK_STEPS:
         events.append(TelemetryEvent(
             asset_id=asset_id, kind="auth",
-            features={"anomaly_score": score},
+            features=dict(features),
             is_malicious=True, technique_hint=technique,
         ))
     return events

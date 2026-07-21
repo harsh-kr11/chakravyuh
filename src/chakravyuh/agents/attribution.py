@@ -2,13 +2,15 @@
 
 Maps each flagged anomaly to a MITRE ATT&CK technique and maintains the
 attacker's frontier (the set of assets the attacker has plausibly reached).
-The reference implementation resolves techniques from the scenario's
-``technique_hint`` via the offline ATT&CK lookup; production swaps in a
-knowledge-graph + RAG mapper over the STIX bundle and CERT-In advisories.
+Resolves techniques from the scenario's ``technique_hint`` against the Neo4j
+knowledge graph (``chakravyuh.knowledge.graph``) when configured/reachable,
+falling back to the offline lookup (``chakravyuh.knowledge.attack``)
+otherwise — the pipeline never requires Neo4j to run.
 """
 from __future__ import annotations
 
-from ..knowledge.attack import lookup
+from ..knowledge import attack as offline_attack
+from ..knowledge.graph import get_graph
 from ..schemas import (
     AnomalySignal,
     IncidentContext,
@@ -20,6 +22,16 @@ from .base import Agent
 
 class AttributionAgent(Agent):
     name = "attribution"
+
+    def _resolve(self, technique_id: str) -> tuple[str, str]:
+        """Return (name, tactic) for a technique id, graph-first."""
+        graph = get_graph()
+        if graph is not None:
+            ctx = graph.lookup_technique(technique_id)
+            if ctx is not None:
+                return ctx.name, ctx.tactic
+        t = offline_attack.lookup(technique_id)
+        return (t.name, t.tactic) if t else ("", "")
 
     def process(
         self,
@@ -41,11 +53,11 @@ class AttributionAgent(Agent):
                 frontier.append(sig.asset_id)
             tid = hint_by_asset.get(sig.asset_id)
             if tid:
-                t = lookup(tid)
+                name, tactic = self._resolve(tid)
                 techniques.append(TechniqueMatch(
                     technique_id=tid,
-                    technique_name=t.name if t else "",
-                    tactic=t.tactic if t else "",
+                    technique_name=name,
+                    tactic=tactic,
                     confidence=sig.score,
                     asset_id=sig.asset_id,
                 ))

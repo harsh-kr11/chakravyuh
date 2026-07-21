@@ -28,15 +28,18 @@
   .status{display:flex;gap:18px;align-items:center;font:500 12px system-ui;color:var(--muted)}
   .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:7px;background:var(--safe);box-shadow:0 0 10px var(--safe)}
   .dot.live{background:var(--saffron);box-shadow:0 0 10px var(--saffron);animation:pulse 1.6s infinite}
+  .dot.bad{background:var(--alarm);box-shadow:0 0 10px var(--alarm)}
   @keyframes pulse{50%{opacity:.35}}
   button{font:600 12px system-ui;letter-spacing:.04em;cursor:pointer;border-radius:8px;
     border:1px solid var(--saffron);background:transparent;color:var(--saffron);padding:10px 16px;transition:.15s}
   button:hover{background:var(--saffron);color:#1a1200}
-  button:disabled{opacity:.35;cursor:not-allowed}
+  button:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
   button.ghost{border-color:var(--line);color:var(--muted)}
   button.ghost:hover{background:var(--line);color:var(--ink)}
   button.approve{border-color:var(--life);color:var(--life)}
   button.approve:hover{background:var(--life);color:#04222b}
+  .apilink{background:none;border:none;color:var(--muted);text-decoration:underline;text-underline-offset:2px;cursor:pointer;font:500 11px system-ui;padding:0}
+  .apilink:hover{color:var(--ink)}
   /* ---- middle ---- */
   .main{display:grid;grid-template-columns:300px 1fr 320px;gap:1px;overflow:hidden;min-height:0}
   .rail{background:var(--panel2);padding:16px;overflow:auto}
@@ -82,9 +85,9 @@
   .metric .n{font:700 20px system-ui}
   .metric .l{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:2px}
   .ok{color:var(--safe)} .bad{color:var(--alarm)}
-  /* bottom */
-  .bottom{background:var(--panel2);border-top:1px solid var(--line);display:grid;grid-template-rows:auto 1fr;max-height:230px}
-  .tabs{display:flex;gap:2px;padding:10px 16px 0}
+  /* ---- bottom ---- */
+  .bottom{background:var(--panel2);border-top:1px solid var(--line);display:grid;grid-template-rows:auto 1fr;max-height:260px}
+  .tabs{display:flex;gap:2px;padding:10px 16px 0;flex-wrap:wrap}
   .tab{font:600 11px system-ui;letter-spacing:.06em;color:var(--muted);padding:8px 14px;border:1px solid var(--line);
     border-bottom:none;border-radius:8px 8px 0 0;cursor:pointer}
   .tab.on{color:var(--ink);background:var(--panel);border-color:var(--line)}
@@ -96,11 +99,31 @@
   .hash{color:#5b6bb0}
   .banner{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:5;
     background:rgba(255,90,90,.14);border:1px solid var(--alarm);color:#ffd0d0;
-    font:600 12px system-ui;letter-spacing:.04em;padding:8px 16px;border-radius:22px;opacity:0;transition:.4s}
+    font:600 12px system-ui;letter-spacing:.04em;padding:8px 16px;border-radius:22px;opacity:0;transition:.4s;
+    max-width:80%;text-align:center}
   .banner.show{opacity:1}
   .banner.safe{background:rgba(55,214,160,.14);border-color:var(--safe);color:#c7ffe9}
+  .banner.error{background:rgba(255,90,90,.18);border-color:var(--alarm);color:#ffd0d0}
   .legend{position:absolute;right:14px;bottom:12px;font:500 10px system-ui;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
   .legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:middle}
+  /* history */
+  .hist-item{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-bottom:8px;cursor:pointer;transition:.15s}
+  .hist-item:hover{border-color:var(--saffron)}
+  .hist-item .hi-id{font:600 12px system-ui;color:var(--ink)}
+  .hist-item .hi-meta{font-size:10px;color:var(--muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap}
+  .hist-item .hi-ok{color:var(--safe)}
+  .hist-item .hi-bad{color:var(--alarm)}
+  .empty{color:var(--muted);font-size:12px;padding:8px 2px}
+  /* copilot */
+  .copilot-body{display:flex;flex-direction:column;gap:10px;height:100%}
+  .copilot-text{font-size:12px;line-height:1.6;color:#cdd6ff;white-space:pre-wrap}
+  .cites{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .cite-chip{font-size:10px;border:1px solid var(--life);color:var(--life);border-radius:6px;padding:3px 7px}
+  .ask-row{display:flex;gap:8px;margin-top:auto;padding-top:10px}
+  .ask-row input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--ink);
+    padding:9px 11px;font:500 12px system-ui}
+  .ask-row input:focus{outline:none;border-color:var(--saffron)}
+  .llm-off{font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:2px 6px;display:inline-block;margin-bottom:8px}
   @media (max-width:920px){.main{grid-template-columns:1fr}.rail{display:none}}
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -113,10 +136,11 @@
       <h1>CHAKRAVYUH</h1>
     </div>
     <div class="status">
-      <span><span class="dot" id="statusDot"></span><span id="statusText">System nominal</span></span>
+      <span><span class="dot" id="statusDot"></span><span id="statusText">Connecting…</span></span>
+      <button class="apilink" id="apiBtn" title="Click to change API URL">api: —</button>
       <span id="clock"></span>
       <button class="ghost" id="replayBtn">Replay</button>
-      <button id="runBtn">Run interdiction ▶</button>
+      <button id="runBtn" disabled>Run interdiction ▶</button>
     </div>
   </div>
 
@@ -156,595 +180,252 @@
     <div class="tabs">
       <div class="tab on" data-tab="report">CERT-In 6-hour report</div>
       <div class="tab" data-tab="audit">Audit trail</div>
+      <div class="tab" data-tab="history">History</div>
+      <div class="tab" data-tab="copilot">Analyst copilot</div>
     </div>
-    <div class="tabbody" id="tabbody"><pre id="reportBody"></pre><div class="audit" id="auditBody" style="display:none"></div></div>
+    <div class="tabbody">
+      <pre id="reportBody"></pre>
+      <div class="audit" id="auditBody" style="display:none"></div>
+      <div id="historyBody" style="display:none"></div>
+      <div class="copilot-body" id="copilotBody" style="display:none">
+        <div id="copilotOut" class="copilot-text">Run an incident, then ask the copilot to explain it.</div>
+        <div class="ask-row">
+          <input id="askInput" placeholder="Ask about this incident (e.g. why was engineer_cred revoked?)" />
+          <button class="ghost" id="askBtn">Ask</button>
+          <button class="ghost" id="briefBtn">Get briefing</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
-<script id="data" type="application/json">{
-  "scenario": {
-    "nodes": [
-      {
-        "id": "internet",
-        "sector": "internet",
-        "type": "internet",
-        "crown_jewel": false,
-        "ring": 0,
-        "ot": false,
-        "criticality": 1
-      },
-      {
-        "id": "it_jump_host",
-        "sector": "power",
-        "type": "it_server",
-        "crown_jewel": false,
-        "ring": 1,
-        "ot": false,
-        "criticality": 2
-      },
-      {
-        "id": "it_workstation",
-        "sector": "power",
-        "type": "it_host",
-        "crown_jewel": false,
-        "ring": 2,
-        "ot": false,
-        "criticality": 2
-      },
-      {
-        "id": "domain_controller",
-        "sector": "power",
-        "type": "it_server",
-        "crown_jewel": false,
-        "ring": 3,
-        "ot": false,
-        "criticality": 4
-      },
-      {
-        "id": "engineer_cred",
-        "sector": "power",
-        "type": "identity",
-        "crown_jewel": false,
-        "ring": 3,
-        "ot": false,
-        "criticality": 3
-      },
-      {
-        "id": "ot_historian",
-        "sector": "power",
-        "type": "ot_historian",
-        "crown_jewel": false,
-        "ring": 4,
-        "ot": true,
-        "criticality": 4
-      },
-      {
-        "id": "ot_scada_server",
-        "sector": "power",
-        "type": "ot_scada",
-        "crown_jewel": true,
-        "ring": 5,
-        "ot": true,
-        "criticality": 5
-      },
-      {
-        "id": "hospital_power_load",
-        "sector": "health",
-        "type": "service_load",
-        "crown_jewel": false,
-        "ring": 6,
-        "ot": false,
-        "criticality": 5
-      }
-    ],
-    "edges": [
-      {
-        "src": "internet",
-        "dst": "it_jump_host",
-        "exploit_cost": 2.0,
-        "cut_cost": 1.0,
-        "protected": false,
-        "action_type": "block_link"
-      },
-      {
-        "src": "it_jump_host",
-        "dst": "it_workstation",
-        "exploit_cost": 1.0,
-        "cut_cost": 1.0,
-        "protected": false,
-        "action_type": "isolate_host"
-      },
-      {
-        "src": "it_workstation",
-        "dst": "engineer_cred",
-        "exploit_cost": 1.0,
-        "cut_cost": 1.0,
-        "protected": false,
-        "action_type": "revoke_credential"
-      },
-      {
-        "src": "it_workstation",
-        "dst": "domain_controller",
-        "exploit_cost": 3.0,
-        "cut_cost": 6.0,
-        "protected": false,
-        "action_type": "isolate_host"
-      },
-      {
-        "src": "domain_controller",
-        "dst": "ot_historian",
-        "exploit_cost": 2.0,
-        "cut_cost": 1.0,
-        "protected": false,
-        "action_type": "block_link"
-      },
-      {
-        "src": "engineer_cred",
-        "dst": "ot_historian",
-        "exploit_cost": 1.0,
-        "cut_cost": 2.0,
-        "protected": false,
-        "action_type": "revoke_credential"
-      },
-      {
-        "src": "ot_historian",
-        "dst": "ot_scada_server",
-        "exploit_cost": 2.0,
-        "cut_cost": 8.0,
-        "protected": false,
-        "action_type": "block_link"
-      },
-      {
-        "src": "ot_scada_server",
-        "dst": "hospital_power_load",
-        "exploit_cost": 99.0,
-        "cut_cost": 100.0,
-        "protected": true,
-        "action_type": "block_link"
-      }
-    ],
-    "crown_jewel": "ot_scada_server",
-    "hospital": "hospital_power_load",
-    "frontier": [
-      "it_jump_host",
-      "it_workstation",
-      "engineer_cred"
-    ],
-    "predicted_next": [
-      "ot_historian"
-    ]
-  },
-  "result": {
-    "incident_id": "INC-0001",
-    "anomalies": [
-      {
-        "ts": "2026-07-20T05:01:45.909768Z",
-        "asset_id": "it_jump_host",
-        "score": 0.82,
-        "kind": "auth",
-        "detail": "behavioural deviation on it_jump_host"
-      },
-      {
-        "ts": "2026-07-20T05:01:45.909771Z",
-        "asset_id": "it_workstation",
-        "score": 0.78,
-        "kind": "auth",
-        "detail": "behavioural deviation on it_workstation"
-      },
-      {
-        "ts": "2026-07-20T05:01:45.909776Z",
-        "asset_id": "engineer_cred",
-        "score": 0.85,
-        "kind": "auth",
-        "detail": "behavioural deviation on engineer_cred"
-      }
-    ],
-    "techniques": [
-      {
-        "technique_id": "T1078",
-        "technique_name": "Valid Accounts",
-        "tactic": "Initial Access",
-        "confidence": 0.82,
-        "asset_id": "it_jump_host"
-      },
-      {
-        "technique_id": "T1021",
-        "technique_name": "Remote Services",
-        "tactic": "Lateral Movement",
-        "confidence": 0.78,
-        "asset_id": "it_workstation"
-      },
-      {
-        "technique_id": "T1003",
-        "technique_name": "OS Credential Dumping",
-        "tactic": "Credential Access",
-        "confidence": 0.85,
-        "asset_id": "engineer_cred"
-      }
-    ],
-    "attacker_frontier": [
-      "it_jump_host",
-      "it_workstation",
-      "engineer_cred"
-    ],
-    "cascade": {
-      "incident_id": "INC-0001",
-      "threatened_crown_jewels": [
-        "ot_scada_server"
-      ],
-      "dependent_loads_at_risk": [
-        "hospital_power_load"
-      ],
-      "cross_sector": true,
-      "narrative": "Attacker can reach crown jewel(s) ['ot_scada_server']. Compromise or naive isolation would jeopardise dependent load(s) ['hospital_power_load'] across sectors."
-    },
-    "interdiction": {
-      "actions": [
-        {
-          "action_type": "revoke_credential",
-          "target": "engineer_cred",
-          "reversible": true,
-          "est_disruption": 2.0,
-          "requires_human_gate": false,
-          "rationale": "block attacker move engineer_cred -> ot_historian"
-        },
-        {
-          "action_type": "block_link",
-          "target": [
-            "domain_controller",
-            "ot_historian"
-          ],
-          "reversible": true,
-          "est_disruption": 1.0,
-          "requires_human_gate": true,
-          "rationale": "block attacker move domain_controller -> ot_historian"
-        }
-      ],
-      "attacker_cost_before": 3.0,
-      "attacker_cost_after": null,
-      "availability_cost": 3.0,
-      "baseline_availability_cost": 108.0,
-      "crown_jewel_protected": true,
-      "cascade_averted": true,
-      "notes": "min-cost cut of 2 edge(s); naive baseline would cost 108.0 and WOULD sever a protected cross-sector dependency."
-    },
-    "executions": [
-      {
-        "action": {
-          "action_type": "revoke_credential",
-          "target": "engineer_cred",
-          "reversible": true,
-          "est_disruption": 2.0,
-          "requires_human_gate": false,
-          "rationale": "block attacker move engineer_cred -> ot_historian"
-        },
-        "executed": true,
-        "gated": false,
-        "approved_by": null,
-        "error": null,
-        "ts": "2026-07-20T05:01:45.912254Z"
-      },
-      {
-        "action": {
-          "action_type": "block_link",
-          "target": [
-            "domain_controller",
-            "ot_historian"
-          ],
-          "reversible": true,
-          "est_disruption": 1.0,
-          "requires_human_gate": true,
-          "rationale": "block attacker move domain_controller -> ot_historian"
-        },
-        "executed": true,
-        "gated": true,
-        "approved_by": "analyst:demo",
-        "error": null,
-        "ts": "2026-07-20T05:01:45.912293Z"
-      }
-    ],
-    "metrics": {
-      "mttd_steps": 3,
-      "mttr_steps": 2
-    },
-    "audit": {
-      "ok": true,
-      "records": [
-        {
-          "seq": 0,
-          "ts": "2026-07-20T05:01:45.909814Z",
-          "actor": "detection",
-          "event_type": "anomalies_detected",
-          "payload": {
-            "count": 3,
-            "assets": [
-              "it_jump_host",
-              "it_workstation",
-              "engineer_cred"
-            ]
-          },
-          "prev_hash": "",
-          "hash": "687bfd0a725ac49fdb8d335d350c42de538acb1594f8611a345037f1de396f9c"
-        },
-        {
-          "seq": 1,
-          "ts": "2026-07-20T05:01:45.909954Z",
-          "actor": "attribution",
-          "event_type": "attack_attributed",
-          "payload": {
-            "techniques": [
-              "T1078",
-              "T1021",
-              "T1003"
-            ],
-            "frontier": [
-              "it_jump_host",
-              "it_workstation",
-              "engineer_cred"
-            ]
-          },
-          "prev_hash": "687bfd0a725ac49fdb8d335d350c42de538acb1594f8611a345037f1de396f9c",
-          "hash": "6a5e0b22a142b9000d7665fd0d761e62c0343caa267a6c22998727dad1c96da0"
-        },
-        {
-          "seq": 2,
-          "ts": "2026-07-20T05:01:45.910457Z",
-          "actor": "cascade",
-          "event_type": "cascade_assessed",
-          "payload": {
-            "threatened": [
-              "ot_scada_server"
-            ],
-            "loads_at_risk": [
-              "hospital_power_load"
-            ],
-            "cross_sector": true
-          },
-          "prev_hash": "6a5e0b22a142b9000d7665fd0d761e62c0343caa267a6c22998727dad1c96da0",
-          "hash": "071bcba0c275d759293f0f057d8045ba6c8e8e71c1ed13994df785167778dfcb"
-        },
-        {
-          "seq": 3,
-          "ts": "2026-07-20T05:01:45.912160Z",
-          "actor": "interdiction",
-          "event_type": "plan_computed",
-          "payload": {
-            "actions": [
-              "revoke_credential",
-              "block_link"
-            ],
-            "availability_cost": 3.0,
-            "baseline_cost": 108.0,
-            "crown_jewel_protected": true,
-            "cascade_averted": true
-          },
-          "prev_hash": "071bcba0c275d759293f0f057d8045ba6c8e8e71c1ed13994df785167778dfcb",
-          "hash": "2505b2a352decefc7d07b39fee547999681991d9518459cd7fc81845855efd2d"
-        },
-        {
-          "seq": 4,
-          "ts": "2026-07-20T05:01:45.912219Z",
-          "actor": "response",
-          "event_type": "action_intent",
-          "payload": {
-            "action": "revoke_credential",
-            "target": "engineer_cred",
-            "gated": false
-          },
-          "prev_hash": "2505b2a352decefc7d07b39fee547999681991d9518459cd7fc81845855efd2d",
-          "hash": "e5825a01e815a7690508e789ad4f0fff877bc92333004f31d113918ec05820c0"
-        },
-        {
-          "seq": 5,
-          "ts": "2026-07-20T05:01:45.912260Z",
-          "actor": "response",
-          "event_type": "action_result",
-          "payload": {
-            "action": "revoke_credential",
-            "executed": true,
-            "gated": false,
-            "approved_by": null
-          },
-          "prev_hash": "e5825a01e815a7690508e789ad4f0fff877bc92333004f31d113918ec05820c0",
-          "hash": "adbdc6561574ce6b9bfed35f0dd6a6736ffeb331a842b5e975905e45d2bc7a79"
-        },
-        {
-          "seq": 6,
-          "ts": "2026-07-20T05:01:45.912275Z",
-          "actor": "response",
-          "event_type": "action_intent",
-          "payload": {
-            "action": "block_link",
-            "target": "('domain_controller', 'ot_historian')",
-            "gated": true
-          },
-          "prev_hash": "adbdc6561574ce6b9bfed35f0dd6a6736ffeb331a842b5e975905e45d2bc7a79",
-          "hash": "870a7882b7365e4f5729554423eeb83b3be432f5fb9629c0dd2fe24bd48bc9ae"
-        },
-        {
-          "seq": 7,
-          "ts": "2026-07-20T05:01:45.912299Z",
-          "actor": "response",
-          "event_type": "action_result",
-          "payload": {
-            "action": "block_link",
-            "executed": true,
-            "gated": true,
-            "approved_by": "analyst:demo"
-          },
-          "prev_hash": "870a7882b7365e4f5729554423eeb83b3be432f5fb9629c0dd2fe24bd48bc9ae",
-          "hash": "f0ec348982374f2147613559b53ea252f5e7954abc80746ae0bea518ec7bfc33"
-        },
-        {
-          "seq": 8,
-          "ts": "2026-07-20T05:01:45.912338Z",
-          "actor": "compliance",
-          "event_type": "certin_report_drafted",
-          "payload": {
-            "incident_id": "INC-0001"
-          },
-          "prev_hash": "f0ec348982374f2147613559b53ea252f5e7954abc80746ae0bea518ec7bfc33",
-          "hash": "2c1e5753979694a61fd315a3e6abd72571735d7757a80d90d7bfb8b4ab27e97e"
-        }
-      ]
-    },
-    "certin_report": "CERT-In INCIDENT REPORT (DRAFT - auto-generated, pending analyst review)\n=======================================================================\nGenerated (UTC): 2026-07-20T05:01:45.912318+00:00\nIncident ID: INC-0001\n\n1. Nature of incident: Unauthorised network intrusion / lateral movement\n   toward a Protected System (Section 70A).\n2. Affected sector(s): Power (Critical Information Infrastructure) + Health (cross-sector dependency).\n3. Observed adversary techniques (MITRE ATT&CK): T1078 (Valid Accounts), T1021 (Remote Services), T1003 (OS Credential Dumping)\n4. Attacker frontier at detection: it_jump_host, it_workstation, engineer_cred\n5. Crown jewel(s) threatened: ot_scada_server\n6. Cross-sector cascade risk: YES - hospital_power_load\n7. Containment actions taken:\n  - revoke_credential -> engineer_cred (disruption=2.0, gated=False)\n  - block_link -> ('domain_controller', 'ot_historian') (disruption=1.0, gated=True)\n8. Crown jewel protected after containment: True\n9. Cascade averted: True\n10. Operational disruption (availability cost): 3.0\n    (naive baseline would have cost 108.0)\n\nNOTE: Report timestamps must be NTP-synchronised (NIC/NPL) and logs retained\nin India for 180 days per the CERT-In Directions, 2022.\n"
-  }
-}</script>
 <script>
-const DATA = JSON.parse(document.getElementById('data').textContent);
-const S = DATA.scenario, R = DATA.result, I = R.interdiction;
-const cut = new Set(I.actions.map(a => Array.isArray(a.target) ? a.target.join('>') : a.target));
-const cutEdges = new Set(I.actions.filter(a=>Array.isArray(a.target)).map(a=>a.target.join('>')));
-const revoked = new Set(I.actions.filter(a=>!Array.isArray(a.target)).map(a=>a.target));
-
-/* ---------- layout: concentric chakravyuh rings ---------- */
-const CX=320, CY=250;
-const ringRadius={0:220,1:180,2:140,3:100,4:56,5:0,6:120};
-const spiral=r=>(-90 + r*52)*Math.PI/180;
-const pos={};
-S.nodes.forEach(n=>{
-  if(n.id===S.hospital){ pos[n.id]={x:CX+150,y:CY+40}; return; }
-  let ang=spiral(n.ring), rad=ringRadius[n.ring]??0;
-  // ring 3 has two nodes -> fan them apart
-  const ringPeers=S.nodes.filter(m=>m.ring===n.ring&&m.id!==S.hospital);
-  if(ringPeers.length>1){ const i=ringPeers.findIndex(m=>m.id===n.id); ang += (i-(ringPeers.length-1)/2)*0.7; }
-  pos[n.id]={x:CX+rad*Math.cos(ang), y:CY+rad*Math.sin(ang)};
+/* ---------- API config ---------- */
+function defaultApiBase(){
+  const q = new URLSearchParams(location.search).get('api');
+  if (q) return q.replace(/\/$/, '');
+  return localStorage.getItem('chakravyuh_api') || 'http://localhost:8080';
+}
+let API = defaultApiBase();
+document.getElementById('apiBtn').textContent = 'api: ' + API;
+document.getElementById('apiBtn').addEventListener('click', () => {
+  const next = prompt('CHAKRAVYUH API base URL', API);
+  if (next) { API = next.replace(/\/$/, ''); localStorage.setItem('chakravyuh_api', API);
+    document.getElementById('apiBtn').textContent = 'api: ' + API; init(); }
 });
 
-const svg=document.getElementById('map');
-const NS='http://www.w3.org/2000/svg';
-function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+async function api(path, opts){
+  const res = await fetch(API + path, Object.assign({headers:{'content-type':'application/json'}}, opts || {}));
+  if (!res.ok) { const body = await res.text().catch(()=> ''); throw new Error(`${res.status} ${path}: ${body.slice(0,200)}`); }
+  return res.json();
+}
 
-/* concentric ring guides (the formation) */
-[220,180,140,100,56].forEach((r,i)=>{
-  svg.appendChild(el('circle',{cx:CX,cy:CY,r,fill:'none',stroke:'#FF9933',
-    'stroke-opacity':0.07+i*0.012,'stroke-width':1}));
-});
+/* ---------- state ---------- */
+let S = null;          // scenario: {nodes, edges, crown_jewel, hospital}
+let R = null, I = null; // current incident result + its interdiction plan
+let currentDbId = null;
+let edgeEls = {}, nodeEls = {}, pos = {};
+const svg = document.getElementById('map');
+const NS = 'http://www.w3.org/2000/svg';
+function el(t, a){ const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; }
 
-/* edges */
-const edgeEls={};
-S.edges.forEach(e=>{
-  const p1=pos[e.src], p2=pos[e.dst]; if(!p1||!p2)return;
-  const key=e.src+'>'+e.dst;
-  const line=el('line',{x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,
-    stroke:e.protected?'var(--life)':'#2b356b',
-    'stroke-width':e.protected?2.2:1.6,
-    'stroke-dasharray':e.protected?'5 5':'none','stroke-linecap':'round'});
-  svg.appendChild(line); edgeEls[key]=line;
-});
+function status(txt, mode){ // mode: 'ok' | 'live' | 'bad'
+  document.getElementById('statusText').textContent = txt;
+  document.getElementById('statusDot').className = 'dot' + (mode === 'live' ? ' live' : mode === 'bad' ? ' bad' : '');
+}
+function banner(txt, kind){ // kind: 'safe' | 'error' | undefined
+  const b = document.getElementById('banner');
+  b.textContent = txt;
+  b.className = 'banner show' + (kind ? ' ' + kind : '');
+}
 
-/* nodes */
-const nodeEls={};
-S.nodes.forEach(n=>{
-  const p=pos[n.id]; const g=el('g',{});
-  const rad=n.crown_jewel?17:(n.id===S.hospital?14:11);
-  const c=el('circle',{cx:p.x,cy:p.y,r:rad,fill:'#0d1430',
-    stroke:n.crown_jewel?'var(--gold)':(n.id===S.hospital?'var(--life)':'#46508f'),
-    'stroke-width':n.crown_jewel?2.5:1.6});
-  const label=el('text',{x:p.x,y:p.y+rad+13,'text-anchor':'middle',
-    fill:'#9aa4d8','font-size':'9.5','font-family':'ui-monospace,monospace'});
-  label.textContent=n.id.replace(/_/g,' ');
-  g.appendChild(c); g.appendChild(label); svg.appendChild(g);
-  nodeEls[n.id]={circle:c,label,node:n,pos:p};
-  if(n.crown_jewel){const t=el('text',{x:p.x,y:p.y+3,'text-anchor':'middle',fill:'var(--gold)','font-size':'9','font-weight':'700'});t.textContent='◆';g.appendChild(t);}
-});
+/* ---------- load scenario & build the static graph ---------- */
+async function loadScenario(){
+  const sc = await api('/scenario');
+  const hospital = (sc.nodes.find(n => n.type === 'service_load') || {}).id;
+
+  // BFS hop-count from the internet-facing node gives the same concentric
+  // rings the original hand-authored layout used, for any graph shape.
+  const entry = (sc.nodes.find(n => n.type === 'internet') || sc.nodes[0]).id;
+  const adj = {};
+  sc.nodes.forEach(n => adj[n.id] = []);
+  sc.edges.forEach(e => { if (adj[e.src]) adj[e.src].push(e.dst); });
+  const ring = {}; ring[entry] = 0;
+  const queue = [entry];
+  while (queue.length) {
+    const u = queue.shift();
+    for (const v of (adj[u] || [])) if (!(v in ring)) { ring[v] = ring[u] + 1; queue.push(v); }
+  }
+  sc.nodes.forEach(n => { if (!(n.id in ring)) ring[n.id] = 1; });
+
+  S = {
+    nodes: sc.nodes.map(n => ({...n, ring: ring[n.id], ot: n.type.startsWith('ot_')})),
+    edges: sc.edges,
+    crown_jewel: sc.crown_jewel,
+    hospital,
+  };
+  drawGraph();
+}
+
+function drawGraph(){
+  svg.innerHTML = '';
+  edgeEls = {}; nodeEls = {}; pos = {};
+
+  const CX = 320, CY = 250;
+  const ringRadius = {0:220, 1:180, 2:140, 3:100, 4:56, 5:0, 6:120};
+  const spiral = r => (-90 + r * 52) * Math.PI / 180;
+  S.nodes.forEach(n => {
+    if (n.id === S.hospital) { pos[n.id] = {x: CX + 150, y: CY + 40}; return; }
+    let ang = spiral(n.ring), rad = ringRadius[n.ring] ?? (n.ring * 40 + 40);
+    const ringPeers = S.nodes.filter(m => m.ring === n.ring && m.id !== S.hospital);
+    if (ringPeers.length > 1) { const i = ringPeers.findIndex(m => m.id === n.id); ang += (i - (ringPeers.length - 1) / 2) * 0.7; }
+    pos[n.id] = {x: CX + rad * Math.cos(ang), y: CY + rad * Math.sin(ang)};
+  });
+
+  [220, 180, 140, 100, 56].forEach((r, i) => {
+    svg.appendChild(el('circle', {cx: CX, cy: CY, r, fill: 'none', stroke: '#FF9933',
+      'stroke-opacity': 0.07 + i * 0.012, 'stroke-width': 1}));
+  });
+
+  S.edges.forEach(e => {
+    const p1 = pos[e.src], p2 = pos[e.dst]; if (!p1 || !p2) return;
+    const key = e.src + '>' + e.dst;
+    const line = el('line', {x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
+      stroke: e.protected ? 'var(--life)' : '#2b356b',
+      'stroke-width': e.protected ? 2.2 : 1.6,
+      'stroke-dasharray': e.protected ? '5 5' : 'none', 'stroke-linecap': 'round'});
+    svg.appendChild(line); edgeEls[key] = line;
+  });
+
+  S.nodes.forEach(n => {
+    const p = pos[n.id]; const g = el('g', {});
+    const rad = n.crown_jewel ? 17 : (n.id === S.hospital ? 14 : 11);
+    const c = el('circle', {cx: p.x, cy: p.y, r: rad, fill: '#0d1430',
+      stroke: n.crown_jewel ? 'var(--gold)' : (n.id === S.hospital ? 'var(--life)' : '#46508f'),
+      'stroke-width': n.crown_jewel ? 2.5 : 1.6});
+    const label = el('text', {x: p.x, y: p.y + rad + 13, 'text-anchor': 'middle',
+      fill: '#9aa4d8', 'font-size': '9.5', 'font-family': 'ui-monospace,monospace'});
+    label.textContent = n.id.replace(/_/g, ' ');
+    g.appendChild(c); g.appendChild(label); svg.appendChild(g);
+    nodeEls[n.id] = {circle: c, label, node: n, pos: p};
+    if (n.crown_jewel) { const t = el('text', {x: p.x, y: p.y + 3, 'text-anchor': 'middle', fill: 'var(--gold)', 'font-size': '9', 'font-weight': '700'}); t.textContent = '◆'; g.appendChild(t); }
+  });
+}
 
 /* ---------- beats ---------- */
-const BEATS=['1 · Detect','2 · Attribute','3 · Cascade','4 · Interdict','5 · Contain','6 · Report'];
-const beatsHost=document.getElementById('beats');
-BEATS.forEach((b,i)=>{const d=document.createElement('div');d.className='beat';d.id='beat'+i;d.textContent=b;beatsHost.appendChild(d);});
-function setBeat(i){for(let k=0;k<BEATS.length;k++){const e=document.getElementById('beat'+k);e.className='beat'+(k<i?' done':k===i?' on':'');}}
+const BEATS = ['1 · Detect', '2 · Attribute', '3 · Cascade', '4 · Interdict', '5 · Contain', '6 · Report'];
+const beatsHost = document.getElementById('beats');
+BEATS.forEach((b, i) => { const d = document.createElement('div'); d.className = 'beat'; d.id = 'beat' + i; d.textContent = b; beatsHost.appendChild(d); });
+function setBeat(i){ for (let k = 0; k < BEATS.length; k++) { const e = document.getElementById('beat' + k); e.className = 'beat' + (k < i ? ' done' : k === i ? ' on' : ''); } }
 
-function feedCard(k,v,sev){const c=document.createElement('div');c.className='card';
-  c.innerHTML=`<div class="k">${k}</div><div class="v ${sev?'sev':''}">${v}</div>`;
-  document.getElementById('feed').appendChild(c);requestAnimationFrame(()=>c.classList.add('show'));}
+function feedCard(k, v, sev){ const c = document.createElement('div'); c.className = 'card';
+  c.innerHTML = `<div class="k">${k}</div><div class="v ${sev ? 'sev' : ''}">${v}</div>`;
+  document.getElementById('feed').appendChild(c); requestAnimationFrame(() => c.classList.add('show')); }
 
-function glowNode(id,color){const n=nodeEls[id];if(!n)return;n.circle.setAttribute('stroke',color);
-  n.circle.setAttribute('stroke-width','3');n.circle.style.filter=`drop-shadow(0 0 7px ${color})`;}
-function glowEdge(src,dst,color){const e=edgeEls[src+'>'+dst];if(!e)return;e.setAttribute('stroke',color);
-  e.setAttribute('stroke-width','2.6');e.style.filter=`drop-shadow(0 0 5px ${color})`;}
-function severEdgeVisual(src,dst){const e=edgeEls[src+'>'+dst];if(!e)return;
-  e.setAttribute('stroke','#37424f');e.setAttribute('stroke-dasharray','3 6');e.style.filter='none';
-  const mx=(+e.getAttribute('x1')+ +e.getAttribute('x2'))/2, my=(+e.getAttribute('y1')+ +e.getAttribute('y2'))/2;
-  const t=el('text',{x:mx,y:my+4,'text-anchor':'middle',fill:'var(--safe)','font-size':'15','font-weight':'700'});
-  t.textContent='✂';t.style.filter='drop-shadow(0 0 6px var(--safe))';svg.appendChild(t);}
-
-function banner(txt,safe){const b=document.getElementById('banner');b.textContent=txt;
-  b.className='banner show'+(safe?' safe':'');}
-function status(txt,live){document.getElementById('statusText').textContent=txt;
-  document.getElementById('statusDot').className='dot'+(live?' live':'');}
-
-/* attack path order for animation */
-const PATH=[['internet','it_jump_host'],['it_jump_host','it_workstation'],['it_workstation','engineer_cred']];
+function glowNode(id, color){ const n = nodeEls[id]; if (!n) return; n.circle.setAttribute('stroke', color);
+  n.circle.setAttribute('stroke-width', '3'); n.circle.style.filter = `drop-shadow(0 0 7px ${color})`; }
+function glowEdge(src, dst, color){ const e = edgeEls[src + '>' + dst]; if (!e) return; e.setAttribute('stroke', color);
+  e.setAttribute('stroke-width', '2.6'); e.style.filter = `drop-shadow(0 0 5px ${color})`; }
+function severEdgeVisual(src, dst){ const e = edgeEls[src + '>' + dst]; if (!e) return;
+  e.setAttribute('stroke', '#37424f'); e.setAttribute('stroke-dasharray', '3 6'); e.style.filter = 'none';
+  const mx = (+e.getAttribute('x1') + +e.getAttribute('x2')) / 2, my = (+e.getAttribute('y1') + +e.getAttribute('y2')) / 2;
+  const t = el('text', {x: mx, y: my + 4, 'text-anchor': 'middle', fill: 'var(--safe)', 'font-size': '15', 'font-weight': '700'});
+  t.textContent = '✂'; t.style.filter = 'drop-shadow(0 0 6px var(--safe))'; svg.appendChild(t); }
 
 function reset(){
-  document.getElementById('feed').innerHTML='';
-  document.getElementById('attStrip').innerHTML='';
-  document.getElementById('planHost').innerHTML='';
-  document.getElementById('banner').className='banner';
-  document.querySelectorAll('svg text').forEach(t=>{if(t.textContent==='✂')t.remove();});
-  S.nodes.forEach(n=>{const e=nodeEls[n.id];e.circle.style.filter='';
-    e.circle.setAttribute('stroke',n.crown_jewel?'var(--gold)':(n.id===S.hospital?'var(--life)':'#46508f'));
-    e.circle.setAttribute('stroke-width',n.crown_jewel?2.5:1.6);});
-  S.edges.forEach(e=>{const l=edgeEls[e.src+'>'+e.dst];l.style.filter='';
-    l.setAttribute('stroke',e.protected?'var(--life)':'#2b356b');
-    l.setAttribute('stroke-width',e.protected?2.2:1.6);l.setAttribute('stroke-dasharray',e.protected?'5 5':'none');});
-  status('System nominal',false);setBeat(-1);
+  document.getElementById('feed').innerHTML = '';
+  document.getElementById('attStrip').innerHTML = '';
+  document.getElementById('planHost').innerHTML = '';
+  document.getElementById('banner').className = 'banner';
+  Array.from(svg.querySelectorAll('text')).forEach(t => { if (t.textContent === '✂') t.remove(); });
+  S.nodes.forEach(n => { const e = nodeEls[n.id]; if (!e) return; e.circle.style.filter = '';
+    e.circle.setAttribute('stroke', n.crown_jewel ? 'var(--gold)' : (n.id === S.hospital ? 'var(--life)' : '#46508f'));
+    e.circle.setAttribute('stroke-width', n.crown_jewel ? 2.5 : 1.6); });
+  S.edges.forEach(e => { const l = edgeEls[e.src + '>' + e.dst]; if (!l) return; l.style.filter = '';
+    l.setAttribute('stroke', e.protected ? 'var(--life)' : '#2b356b');
+    l.setAttribute('stroke-width', e.protected ? 2.2 : 1.6); l.setAttribute('stroke-dasharray', e.protected ? '5 5' : 'none'); });
+  status('System nominal', null); setBeat(-1);
 }
 
-const wait=ms=>new Promise(r=>setTimeout(r,ms));
-let running=false;
+/* ---------- run a live incident ---------- */
+const wait = ms => new Promise(r => setTimeout(r, ms));
+let running = false;
+
+function buildAttackPath(frontier){
+  const entry = (S.nodes.find(n => n.type === 'internet') || {}).id;
+  const chain = entry ? [entry, ...frontier] : frontier;
+  const pairs = [];
+  for (let i = 0; i < chain.length - 1; i++) if (edgeEls[chain[i] + '>' + chain[i + 1]]) pairs.push([chain[i], chain[i + 1]]);
+  return pairs;
+}
+function predictedNextHops(frontier){
+  if (!frontier.length) return [];
+  const last = frontier[frontier.length - 1];
+  return S.edges.filter(e => e.src === last && !frontier.includes(e.dst)).map(e => e.dst);
+}
 
 async function run(){
-  if(running)return; running=true; reset();
-  document.getElementById('runBtn').disabled=true;
-  status('Intrusion in progress',true);
+  if (running || !S) return; running = true; reset();
+  document.getElementById('runBtn').disabled = true;
+  status('Intrusion in progress', 'live');
 
-  /* Beat 1 detect */
+  let data;
+  try {
+    data = await api('/incidents/analyze', {method: 'POST', body: JSON.stringify({incident_id: 'INC-' + Date.now()})});
+  } catch (err) {
+    banner('✕ Could not reach the API: ' + err.message, 'error');
+    status('API unreachable', 'bad');
+    document.getElementById('runBtn').disabled = false; running = false;
+    return;
+  }
+  R = data; I = R.interdiction; currentDbId = R.db_id;
+  await renderHistory();
+
+  const cutEdges = new Set(I.actions.filter(a => Array.isArray(a.target)).map(a => a.target.join('>')));
+  const revoked = new Set(I.actions.filter(a => !Array.isArray(a.target)).map(a => a.target));
+  const PATH = buildAttackPath(R.attacker_frontier);
+  const predictedNext = predictedNextHops(R.attacker_frontier);
+
   setBeat(0);
-  for(const s of R.anomalies){ glowNode(s.asset_id,'var(--alarm)');
-    feedCard('Anomaly · '+s.asset_id.replace(/_/g,' '),
-      `behavioural score ${s.score.toFixed(2)} · no signature match`,true); await wait(650);}
+  for (const s of R.anomalies) { glowNode(s.asset_id, 'var(--alarm)');
+    feedCard('Anomaly · ' + s.asset_id.replace(/_/g, ' '), `behavioural score ${s.score.toFixed(2)} · no signature match`, true); await wait(650); }
   await wait(300);
 
-  /* Beat 2 attribute */
   setBeat(1);
-  const strip=document.getElementById('attStrip');
-  for(let i=0;i<R.techniques.length;i++){const t=R.techniques[i];
-    if(i<PATH.length) glowEdge(PATH[i][0],PATH[i][1],'var(--alarm)');
-    const chip=document.createElement('div');chip.className='chip';
-    chip.innerHTML=`${t.technique_id}<small>${t.technique_name}</small>`;strip.appendChild(chip);
-    requestAnimationFrame(()=>chip.classList.add('show'));await wait(600);}
-  feedCard('Attribution','Confirmed intrusion · lateral movement toward OT'); await wait(400);
+  const strip = document.getElementById('attStrip');
+  for (let i = 0; i < R.techniques.length; i++) { const t = R.techniques[i];
+    if (i < PATH.length) glowEdge(PATH[i][0], PATH[i][1], 'var(--alarm)');
+    const chip = document.createElement('div'); chip.className = 'chip';
+    chip.innerHTML = `${t.technique_id}<small>${t.technique_name}</small>`; strip.appendChild(chip);
+    requestAnimationFrame(() => chip.classList.add('show')); await wait(600); }
+  feedCard('Attribution', 'Confirmed intrusion · lateral movement toward OT'); await wait(400);
 
-  /* Beat 3 cascade */
   setBeat(2);
-  S.predicted_next.forEach(id=>glowEdge('engineer_cred',id,'#ff8a5a'));
-  glowNode(S.crown_jewel,'var(--alarm)');
-  const life=edgeEls[S.crown_jewel+'>'+S.hospital];life.style.filter='drop-shadow(0 0 8px var(--life))';life.setAttribute('stroke-width','3');
-  glowNode(S.hospital,'var(--life)');
+  predictedNext.forEach(id => glowEdge(R.attacker_frontier[R.attacker_frontier.length - 1], id, '#ff8a5a'));
+  glowNode(S.crown_jewel, 'var(--alarm)');
+  const life = edgeEls[S.crown_jewel + '>' + S.hospital];
+  if (life) { life.style.filter = 'drop-shadow(0 0 8px var(--life))'; life.setAttribute('stroke-width', '3'); }
+  glowNode(S.hospital, 'var(--life)');
   banner('⚠ Cross-sector cascade predicted · grid loss → hospital power');
-  feedCard('Cascade · cross-sector',R.cascade.narrative,true); await wait(1300);
+  feedCard('Cascade · cross-sector', R.cascade.narrative, true); await wait(1300);
 
-  /* Beat 4 interdict */
   setBeat(3);
-  renderPlan(); await wait(400);
+  renderPlan(cutEdges, revoked, predictedNext); await wait(400);
   banner('Interdiction ready · awaiting analyst approval for OT action');
-  status('Containment proposed',true);
+  status('Containment proposed', 'live');
 }
 
-function renderPlan(){
-  const host=document.getElementById('planHost');
-  const acts=I.actions.map(a=>{
-    const gated=a.requires_human_gate;
-    const tgt=Array.isArray(a.target)?a.target.join(' → '):a.target;
-    return `<div class="action"><span class="tt">${a.action_type.replace(/_/g,' ')}</span>
-      <span>${tgt}</span><span class="gate ${gated?'':'auto'}">${gated?'HUMAN GATE':'AUTONOMOUS'}</span></div>`;
+function renderPlan(cutEdges, revoked, predictedNext){
+  const host = document.getElementById('planHost');
+  const acts = I.actions.map(a => {
+    const gated = a.requires_human_gate;
+    const tgt = Array.isArray(a.target) ? a.target.join(' → ') : a.target;
+    return `<div class="action"><span class="tt">${a.action_type.replace(/_/g, ' ')}</span>
+      <span>${tgt}</span><span class="gate ${gated ? '' : 'auto'}">${gated ? 'HUMAN GATE' : 'AUTONOMOUS'}</span></div>`;
   }).join('');
-  const smart=I.availability_cost, naive=I.baseline_availability_cost;
-  const smartPct=Math.max(4,smart/naive*100), naivePct=100;
-  host.innerHTML=`
+  const smart = I.availability_cost, naive = I.baseline_availability_cost;
+  const smartPct = Math.max(4, smart / naive * 100), naivePct = 100;
+  host.innerHTML = `
    <div class="idx">
      <div class="title">Minimal-disruption cut</div>
      ${acts}
@@ -761,51 +442,136 @@ function renderPlan(){
      <div class="metric"><div class="n" id="mMttd">${R.metrics.mttd_steps}</div><div class="l">MTTD steps</div></div>
      <div class="metric"><div class="n" id="mMttr">${R.metrics.mttr_steps}</div><div class="l">MTTR actions</div></div>
    </div>`;
-  setTimeout(()=>{document.getElementById('fSmart').style.width=smartPct+'%';
-    document.getElementById('fNaive').style.width=naivePct+'%';},80);
-  document.getElementById('approveBtn').addEventListener('click',contain);
+  setTimeout(() => { document.getElementById('fSmart').style.width = smartPct + '%'; document.getElementById('fNaive').style.width = naivePct + '%'; }, 80);
+  document.getElementById('approveBtn').addEventListener('click', () => contain(cutEdges, revoked, predictedNext));
+
+  document.getElementById('reportBody').textContent = R.certin_report;
+  const auditHost = document.getElementById('auditBody');
+  auditHost.innerHTML = R.audit.records.map(r =>
+    `<div><span class="seq">#${r.seq}</span> <span class="h">${r.actor}·${r.event_type}</span> ` +
+    `<span class="hash">${(r.hash || '').slice(0, 16)}…</span></div>`).join('') +
+    `<div style="margin-top:8px;color:var(--safe)">chain verified: ${R.audit.ok} · ${R.audit.records.length} records</div>`;
 }
 
-async function contain(){
-  const b=document.getElementById('approveBtn');b.disabled=true;b.textContent='Containment executed';
+async function contain(cutEdges, revoked, predictedNext){
+  const b = document.getElementById('approveBtn'); b.disabled = true; b.textContent = 'Containment executed';
   setBeat(4);
-  /* sever cut edges */
-  cutEdges.forEach(k=>{const [s,d]=k.split('>');severEdgeVisual(s,d);});
-  revoked.forEach(id=>{ // revoked credential: dim its outward edges
-    S.edges.filter(e=>e.src===id).forEach(e=>severEdgeVisual(e.src,e.dst));
-    glowNode(id,'var(--safe)');});
-  S.predicted_next.forEach(id=>{const e=edgeEls['engineer_cred>'+id];if(e){e.style.filter='';e.setAttribute('stroke','#37424f');}});
+  cutEdges.forEach(k => { const [s, d] = k.split('>'); severEdgeVisual(s, d); });
+  revoked.forEach(id => { S.edges.filter(e => e.src === id).forEach(e => severEdgeVisual(e.src, e.dst)); glowNode(id, 'var(--safe)'); });
+  predictedNext.forEach(id => { const e = edgeEls[R.attacker_frontier[R.attacker_frontier.length - 1] + '>' + id]; if (e) { e.style.filter = ''; e.setAttribute('stroke', '#37424f'); } });
   await wait(500);
-  glowNode(S.crown_jewel,'var(--safe)'); glowNode(S.hospital,'var(--safe)');
-  document.getElementById('mProt').textContent=I.crown_jewel_protected?'SAFE':'AT RISK';
-  document.getElementById('mCasc').textContent=I.cascade_averted?'AVERTED':'—';
-  banner('✔ Attack contained · crown jewel safe · hospital power preserved',true);
-  status('Contained',false);document.getElementById('statusDot').className='dot';
-  /* Beat 6 report + audit */
+  glowNode(S.crown_jewel, 'var(--safe)'); glowNode(S.hospital, 'var(--safe)');
+  document.getElementById('mProt').textContent = I.crown_jewel_protected ? 'SAFE' : 'AT RISK';
+  document.getElementById('mCasc').textContent = I.cascade_averted ? 'AVERTED' : '—';
+  banner('✔ Attack contained · crown jewel safe · hospital power preserved', 'safe');
+  status('Contained', null);
   await wait(500); setBeat(5);
-  document.getElementById('runBtn').disabled=false; running=false;
+  document.getElementById('runBtn').disabled = false; running = false;
 }
 
-/* report + audit tabs */
-document.getElementById('reportBody').textContent=R.certin_report;
-const auditHost=document.getElementById('auditBody');
-auditHost.innerHTML=R.audit.records.map(r=>
-  `<div><span class="seq">#${r.seq}</span> <span class="h">${r.actor}·${r.event_type}</span> `+
-  `<span class="hash">${(r.hash||'').slice(0,16)}…</span></div>`).join('')+
-  `<div style="margin-top:8px;color:var(--safe)">chain verified: ${R.audit.ok} · ${R.audit.records.length} records</div>`;
-document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
-  const isR=t.dataset.tab==='report';
-  document.getElementById('reportBody').style.display=isR?'block':'none';
-  document.getElementById('auditBody').style.display=isR?'none':'block';}));
+/* ---------- history tab ---------- */
+async function renderHistory(){
+  const host = document.getElementById('historyBody');
+  let rows;
+  try { rows = await api('/incidents?limit=25'); } catch (err) { host.innerHTML = `<div class="empty">Could not load history: ${err.message}</div>`; return; }
+  if (!rows.length) { host.innerHTML = '<div class="empty">No incidents analyzed yet — click "Run interdiction".</div>'; return; }
+  host.innerHTML = rows.map(r => `
+    <div class="hist-item" data-id="${r.id}">
+      <div class="hi-id">#${r.id} · ${r.incident_id}</div>
+      <div class="hi-meta">
+        <span class="${r.crown_jewel_protected ? 'hi-ok' : 'hi-bad'}">${r.crown_jewel_protected ? 'protected' : 'at risk'}</span>
+        <span class="${r.cascade_averted ? 'hi-ok' : 'hi-bad'}">${r.cascade_averted ? 'cascade averted' : 'cascade risk'}</span>
+        <span>cost ${r.availability_cost}</span>
+        <span>${new Date(r.created_at).toLocaleString()}</span>
+      </div>
+    </div>`).join('');
+  host.querySelectorAll('.hist-item').forEach(el => el.addEventListener('click', () => loadHistoricalIncident(el.dataset.id)));
+}
 
-/* clock */
-setInterval(()=>{document.getElementById('clock').textContent=new Date().toISOString().slice(11,19)+' UTC';},1000);
+async function loadHistoricalIncident(id){
+  let data;
+  try { data = await api('/incidents/' + id); } catch (err) { banner('✕ ' + err.message, 'error'); return; }
+  R = data; I = R.interdiction; currentDbId = data.db_id || Number(id);
+  reset();
+  const cutEdges = new Set(I.actions.filter(a => Array.isArray(a.target)).map(a => a.target.join('>')));
+  const revoked = new Set(I.actions.filter(a => !Array.isArray(a.target)).map(a => a.target));
+  R.anomalies.forEach(s => glowNode(s.asset_id, 'var(--alarm)'));
+  cutEdges.forEach(k => { const [s, d] = k.split('>'); severEdgeVisual(s, d); });
+  revoked.forEach(rid => glowNode(rid, 'var(--safe)'));
+  glowNode(S.crown_jewel, I.crown_jewel_protected ? 'var(--safe)' : 'var(--alarm)');
+  glowNode(S.hospital, 'var(--safe)');
+  renderPlan(cutEdges, revoked, []);
+  document.getElementById('mProt').textContent = I.crown_jewel_protected ? 'SAFE' : 'AT RISK';
+  document.getElementById('mCasc').textContent = I.cascade_averted ? 'AVERTED' : '—';
+  setBeat(5);
+  banner(`Loaded incident #${id} from history`, I.crown_jewel_protected ? 'safe' : 'error');
+  status('Viewing history · #' + id, null);
+  selectTab('report');
+}
 
-document.getElementById('runBtn').addEventListener('click',run);
-document.getElementById('replayBtn').addEventListener('click',()=>{running=false;reset();});
-reset();
-if(matchMedia('(prefers-reduced-motion:reduce)').matches){/* leave static */}
+/* ---------- copilot tab ---------- */
+document.getElementById('briefBtn').addEventListener('click', async () => {
+  const out = document.getElementById('copilotOut');
+  if (!currentDbId) { out.textContent = 'Run or load an incident first.'; return; }
+  out.textContent = 'Asking the copilot…';
+  try {
+    const res = await api(`/incidents/${currentDbId}/briefing`);
+    renderCopilotResult(res);
+  } catch (err) { out.textContent = 'Copilot error: ' + err.message; }
+});
+document.getElementById('askBtn').addEventListener('click', askCopilot);
+document.getElementById('askInput').addEventListener('keydown', e => { if (e.key === 'Enter') askCopilot(); });
+async function askCopilot(){
+  const input = document.getElementById('askInput');
+  const q = input.value.trim();
+  const out = document.getElementById('copilotOut');
+  if (!currentDbId) { out.textContent = 'Run or load an incident first.'; return; }
+  if (!q) return;
+  out.textContent = 'Asking the copilot…';
+  try {
+    const res = await api(`/incidents/${currentDbId}/ask`, {method: 'POST', body: JSON.stringify({question: q})});
+    renderCopilotResult(res);
+    input.value = '';
+  } catch (err) { out.textContent = 'Copilot error: ' + err.message; }
+}
+function renderCopilotResult(res){
+  const out = document.getElementById('copilotOut');
+  const offNote = res.llm_used ? '' : '<div class="llm-off">No LLM provider configured — showing retrieved context only. Set CHAKRAVYUH_LLM_PROVIDER + an API key to enable full answers.</div>';
+  const cites = (res.citations || []).map(c => `<span class="cite-chip">${c}</span>`).join('');
+  out.innerHTML = offNote + `<div>${escapeHtml(res.text)}</div>` + (cites ? `<div class="cites">${cites}</div>` : '');
+}
+function escapeHtml(s){ const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+/* ---------- tabs ---------- */
+function selectTab(name){
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
+  document.getElementById('reportBody').style.display = name === 'report' ? 'block' : 'none';
+  document.getElementById('auditBody').style.display = name === 'audit' ? 'block' : 'none';
+  document.getElementById('historyBody').style.display = name === 'history' ? 'block' : 'none';
+  document.getElementById('copilotBody').style.display = name === 'copilot' ? 'flex' : 'none';
+  if (name === 'history') renderHistory();
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => selectTab(t.dataset.tab)));
+
+/* ---------- boot ---------- */
+document.getElementById('runBtn').addEventListener('click', run);
+document.getElementById('replayBtn').addEventListener('click', () => { if (!running) reset(); });
+setInterval(() => { document.getElementById('clock').textContent = new Date().toISOString().slice(11, 19) + ' UTC'; }, 1000);
+
+async function init(){
+  status('Connecting…', 'live');
+  try {
+    await loadScenario();
+    await renderHistory();
+    status('System nominal', null);
+    document.getElementById('runBtn').disabled = false;
+  } catch (err) {
+    status('API unreachable', 'bad');
+    banner(`✕ Can't reach the API at ${API} — start it with "chakravyuh serve" (see README), then click Replay.`, 'error');
+    document.getElementById('historyBody').innerHTML = `<div class="empty">Could not load: ${err.message}</div>`;
+  }
+}
+init();
 </script>
 </body>
 </html>

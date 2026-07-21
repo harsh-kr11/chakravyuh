@@ -1,4 +1,23 @@
 services:
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      # Override via a .env file or your shell — this default is for local
+      # dev only. See .env.example.
+      - NEO4J_AUTH=neo4j/${CHAKRAVYUH_NEO4J_PASSWORD:-chakravyuh_dev}
+      - NEO4J_PLUGINS=["apoc"]
+    ports:
+      - "7474:7474"   # browser UI
+      - "7687:7687"   # bolt
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   api:
     build: .
     ports:
@@ -8,7 +27,15 @@ services:
       - CHAKRAVYUH_LLM_PROVIDER=none
       # - CHAKRAVYUH_LLM_PROVIDER=anthropic
       # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # - CHAKRAVYUH_LLM_PROVIDER=gemini
+      # - GEMINI_API_KEY=${GEMINI_API_KEY}
       - CHAKRAVYUH_ANOMALY_THRESHOLD=0.5
+      - CHAKRAVYUH_NEO4J_URI=bolt://neo4j:7687
+      - CHAKRAVYUH_NEO4J_USER=neo4j
+      - CHAKRAVYUH_NEO4J_PASSWORD=${CHAKRAVYUH_NEO4J_PASSWORD:-chakravyuh_dev}
+    depends_on:
+      neo4j:
+        condition: service_healthy
     restart: unless-stopped
 
   # Static command-centre dashboard (open http://localhost:8081)
@@ -20,3 +47,6 @@ services:
     command: python -m http.server 8081
     ports:
       - "8081:8081"
+
+volumes:
+  neo4j_data:

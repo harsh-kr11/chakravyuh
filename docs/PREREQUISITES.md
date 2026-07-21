@@ -68,25 +68,34 @@ docker compose up --build
 ## 4. API keys
 
 **None are required for any core functionality.** Keys are only for the
-optional LLM that writes natural-language analyst rationale — it never selects
-containment actions and is never in the safety path.
+optional Analyst Copilot agent (`chakravyuh.agents.copilot`) that writes
+natural-language, RAG-grounded incident narrative — it never selects
+containment actions and is never in the safety path (see
+`chakravyuh/llm/base.py`).
 
 | Variable | Needed when | How to get it |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | `CHAKRAVYUH_LLM_PROVIDER=anthropic` | console.anthropic.com |
 | `OPENAI_API_KEY` | `CHAKRAVYUH_LLM_PROVIDER=openai` | platform.openai.com |
+| `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) | `CHAKRAVYUH_LLM_PROVIDER=gemini` | aistudio.google.com/apikey |
 
-Enable (optional):
+Enable (optional), e.g. for Gemini:
 
 ```bash
-export CHAKRAVYUH_LLM_PROVIDER=anthropic
-export ANTHROPIC_API_KEY=sk-ant-...
-export CHAKRAVYUH_LLM_MODEL=claude-sonnet-4-6   # or your chosen model
+export CHAKRAVYUH_LLM_PROVIDER=gemini
+export GEMINI_API_KEY=...
+export CHAKRAVYUH_LLM_MODEL=gemini-2.5-flash   # optional, this is the default
 pip install -e ".[llm]"
+
+chakravyuh serve
+curl -s localhost:8080/incidents/1/briefing      # read-only, RAG-grounded narrative
+curl -s -X POST localhost:8080/incidents/1/ask \
+     -H 'content-type: application/json' -d '{"question":"why was engineer_cred revoked?"}'
 ```
 
-Never commit keys. Use environment variables or a secrets manager. `.env` is
-git-ignored.
+Never commit keys, and never paste them into chat with an assistant — set
+them as environment variables (or in a git-ignored `.env`) and only confirm
+they're set. `.env` is git-ignored here.
 
 ### Other configuration (all optional, all have defaults)
 
@@ -96,6 +105,7 @@ git-ignored.
 | `CHAKRAVYUH_BLAST_RADIUS` | `5.0` | disruption above which an action is human-gated |
 | `CHAKRAVYUH_API_HOST` | `127.0.0.1` | API bind host |
 | `CHAKRAVYUH_API_PORT` | `8080` | API bind port |
+| `CHAKRAVYUH_DB_PATH` | `data/chakravyuh.db` | SQLite path for persisted incidents (`GET /incidents`) |
 
 ## 5. Datasets (optional — for evaluation on real data)
 

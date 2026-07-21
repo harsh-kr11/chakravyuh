@@ -33,5 +33,7 @@ make lint         # ruff
 Conventional-ish: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`.
 
 ## Areas we'd love help with
-See `docs/ROADMAP.md` — real detectors (OpTC/HAI), the CybORG adapter, the
-Neo4j ATT&CK knowledge graph, and the command-centre dashboard.
+See `docs/ROADMAP.md` — real detectors trained on OpTC/HAI (today's model
+trains on a generated dataset), the CybORG adapter, expanding the knowledge
+graph beyond its curated seed set to the full ATT&CK STIX bundle + CISA KEV,
+and real SOAR/EDR/firewall integrations behind `RealAdapter`.

@@ -4,7 +4,7 @@ install:
 	pip install -e .
 
 dev:
-	pip install -e ".[dev,detect]"
+	pip install -e ".[all]"
 
 demo:
 	python -m chakravyuh.demo

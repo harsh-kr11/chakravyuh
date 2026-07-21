@@ -6,7 +6,7 @@
 
 *When an attacker is already inside, don't just detect and alert — compute the **smallest** set of containment actions that provably cuts them off from the crown jewel, without taking the grid (or the hospital that depends on it) down.*
 
-[![CI](https://github.com/your-org/chakravyuh/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/chakravyuh/actions)
+[![CI](https://github.com/harsh-kr11/chakravyuh/actions/workflows/ci.yml/badge.svg)](https://github.com/harsh-kr11/chakravyuh/actions)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 
@@ -37,32 +37,53 @@ The **interdiction** step is the novel core: we build a live attack graph, then 
 
 ## Quickstart
 
+### Tier 0 — core, zero config, fully offline
+
 ```bash
-git clone https://github.com/your-org/chakravyuh
+git clone https://github.com/harsh-kr11/chakravyuh
 cd chakravyuh
-pip install -e ".[dev]"
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev,api]"
 
-# 1) Narrated cross-sector demo (RedEcho-style scenario) — zero config
-python -m chakravyuh.demo
-
-# 2) Full test-suite
-pytest
-
-# 3) REST API  (pip install -e ".[api]")
-chakravyuh serve            # -> http://127.0.0.1:8080/docs
-curl -s -X POST localhost:8080/incidents/analyze \
-     -H 'content-type: application/json' -d '{"incident_id":"INC-1"}'
-
-# 4) Command-centre dashboard (self-contained; just open it)
-python -m http.server --directory dashboard 8081   # -> http://localhost:8081
-
-# 5) Everything in containers
-docker compose up --build   # API :8080  +  dashboard :8081
+python -m chakravyuh.demo     # narrated cross-sector demo — zero config
+pytest                        # full test-suite
 ```
 
-You should see the pipeline detect a low-and-slow intrusion, attribute it to ATT&CK techniques, flag the cross-sector cascade risk, compute a **2-action minimal cut** that blocks the attacker while preserving the hospital load (disruption **3.0 vs a naive baseline's 108.0**), execute it with OT actions human-gated, and verify the audit chain. The dashboard renders the network as the *chakravyuh* formation — concentric defensive rings with the crown jewel at the centre — and animates the breach, the predicted cross-sector cascade, and the interdiction that seals it.
+You should see the pipeline detect a low-and-slow intrusion, attribute it to ATT&CK techniques, flag the cross-sector cascade risk, compute a **2-action minimal cut** that blocks the attacker while preserving the hospital load (disruption **3.0 vs a naive baseline's 108.0**), execute it with OT actions human-gated, and verify the audit chain.
 
-**Zero config, zero keys, fully offline.** No API keys or datasets are needed for the demo, API, or dashboard. See [`docs/PREREQUISITES.md`](docs/PREREQUISITES.md) for optional LLM rationale and real-dataset evaluation.
+### Tier 1 — the REST API + live dashboard
+
+```bash
+chakravyuh serve              # -> http://127.0.0.1:8080/docs
+curl -s -X POST localhost:8080/incidents/analyze \
+     -H 'content-type: application/json' -d '{"incident_id":"INC-1"}'
+curl -s localhost:8080/incidents          # list persisted incidents
+curl -s localhost:8080/incidents/1        # fetch one by id
+
+# in another terminal — the dashboard is a live client of the API above,
+# not a static replay, so the API must be running for it to show anything:
+python -m http.server --directory dashboard 8081   # -> http://localhost:8081
+```
+
+Open the dashboard, click **Run interdiction**, and it drives the same pipeline live: real anomaly scores, a real computed cut, a real CERT-In report, plus a **History** tab (past incidents) and an **Analyst copilot** tab.
+
+### Tier 2 — knowledge graph + Analyst Copilot (optional)
+
+```bash
+cp .env.example .env          # then fill in GEMINI_API_KEY (or leave LLM off)
+docker compose up -d neo4j    # real ATT&CK / CVE / advisory graph on :7474/:7687
+chakravyuh serve              # picks up .env automatically
+```
+
+With Neo4j running, attribution and the RAG-grounded copilot (`/incidents/{id}/briefing`, `/incidents/{id}/ask`) use the real graph; without it, everything still works via a small offline fallback. See [`docs/PREREQUISITES.md`](docs/PREREQUISITES.md) for the full breakdown and [`.env.example`](.env.example) for every setting.
+
+### Everything in containers
+
+```bash
+docker compose up --build     # neo4j :7474/:7687 + api :8080 + dashboard :8081
+```
+
+**Zero config, zero keys, fully offline at its core.** Tier 0 needs nothing. Tiers 1–2 are additive — no capability requires them.
 
 ## What's in the box
 
@@ -71,8 +92,11 @@ You should see the pipeline detect a low-and-slow intrusion, attribute it to ATT
 | Domain schemas (typed contracts) | `chakravyuh.schemas` | ✅ stable |
 | Attack graph model | `chakravyuh.graph.attack_graph` | ✅ |
 | **Interdiction engine (min-cost cross-sector cut)** | `chakravyuh.graph.interdiction` | ✅ **the wedge** |
-| Detection agent (UEBA, pluggable model) | `chakravyuh.agents.detection` | ✅ reference / 🔌 pluggable |
-| Attribution agent (ATT&CK) | `chakravyuh.agents.attribution` | ✅ reference / 🔌 RAG-ready |
+| Detection agent — unsupervised UEBA (IsolationForest) | `chakravyuh.ml` + `chakravyuh.agents.detection` | ✅ trained model, not a signature |
+| Attribution agent (ATT&CK, Neo4j-backed) | `chakravyuh.agents.attribution` | ✅ graph-first / 🔌 offline fallback |
+| Knowledge graph — ATT&CK + CVE + CERT-In-style advisories | `chakravyuh.knowledge.graph` | ✅ Neo4j / 🔌 optional |
+| RAG retrieval over the knowledge graph | `chakravyuh.rag` | ✅ |
+| Analyst Copilot agent (read-only, RAG-grounded) | `chakravyuh.agents.copilot` | ✅ Anthropic / OpenAI / Gemini |
 | Cascade agent (cross-sector impact) | `chakravyuh.agents.cascade` | ✅ |
 | Interdiction agent | `chakravyuh.agents.interdiction_agent` | ✅ |
 | Response / SOAR agent (human-gated) | `chakravyuh.agents.response` | ✅ |
@@ -81,6 +105,7 @@ You should see the pipeline detect a low-and-slow intrusion, attribute it to ATT
 | Orchestrator (pipeline + fail-safe) | `chakravyuh.orchestrator` | ✅ |
 | Infrastructure adapter interface + replay | `chakravyuh.adapters` | ✅ (replay) / 🔌 dataset & real stubs |
 | REST API (FastAPI) | `chakravyuh.api` | ✅ |
+| Persistent incident store (SQLite) | `chakravyuh.store` | ✅ |
 | CLI (`demo` / `analyze` / `serve`) | `chakravyuh.cli` | ✅ |
 | Optional LLM rationale (never in safety path) | `chakravyuh.llm` | ✅ interface / 🔌 keys optional |
 | Command-centre dashboard (chakravyuh map) | `dashboard/` | ✅ |
@@ -99,7 +124,7 @@ Full mapping incl. datasets and evaluation metrics: [`docs/ARCHITECTURE.md`](doc
 
 ## Roadmap
 
-See [`docs/ROADMAP.md`](docs/ROADMAP.md). Near-term: real detectors on DARPA OpTC (IT) and HAI/SWaT (OT), a CybORG/CAGE live-attack adapter, a Neo4j ATT&CK knowledge graph + RAG over CVE/CERT-In advisories, and the command-centre dashboard.
+See [`docs/ROADMAP.md`](docs/ROADMAP.md). Done: the Neo4j ATT&CK/CVE/CERT-In-advisory knowledge graph, RAG retrieval, the Gemini-backed Analyst Copilot, and a dashboard wired to the live API. Still ahead: real detectors trained on DARPA OpTC (IT) and HAI/SWaT (OT) in place of the synthetic generator, a CybORG/CAGE live-attack adapter, and real SOAR/EDR/firewall integrations behind `RealAdapter` (currently a guarded stub — see the safety note below).
 
 ## Research & IP
 

@@ -16,6 +16,8 @@ htmlcov/
 data/raw/
 data/*.csv
 data/*.parquet
+data/*.db
+data/models/
 .DS_Store
 .idea/
 .vscode/

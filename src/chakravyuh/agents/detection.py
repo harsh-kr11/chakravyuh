@@ -1,17 +1,15 @@
 """Detection agent (UEBA / behavioural anomaly).
 
-Reference implementation scores each telemetry event and raises an
-``AnomalySignal`` when the deviation exceeds a threshold. The scoring function
-here reads a precomputed ``anomaly_score`` (from the scenario) so the demo is
-deterministic; the production detector plugs a real unsupervised model in via
-``score_event`` (e.g. Isolation Forest on IT netflow/auth features, or a
-reconstruction-based detector on ICS telemetry — see docs/DATASETS.md).
-
-No malware signatures are used — detection is purely behavioural, satisfying
-the challenge's "no known malware signature" requirement.
+Scores each telemetry event with an unsupervised IsolationForest
+(``chakravyuh.ml``) fit over continuous behavioural features — no malware
+signatures anywhere. If the ``[detect]`` extra (scikit-learn) is not
+installed, falls back to reading a precomputed ``anomaly_score`` feature so
+the zero-dependency core demo still runs deterministically.
 """
 from __future__ import annotations
 
+from ..ml.features import extract_features
+from ..ml.model import get_model
 from ..schemas import AnomalySignal, TelemetryEvent
 from .base import Agent
 
@@ -20,8 +18,15 @@ class DetectionAgent(Agent):
     name = "detection"
 
     def score_event(self, event: TelemetryEvent) -> float:
-        """Return a 0..1 anomaly score. Override with a real model."""
-        return float(event.features.get("anomaly_score", 0.0))
+        """Return a 0..1 anomaly score from the trained UEBA model.
+
+        Falls back to a precomputed ``anomaly_score`` feature when
+        scikit-learn is not installed.
+        """
+        model = get_model()
+        if model is None:
+            return float(event.features.get("anomaly_score", 0.0))
+        return model.score(extract_features(event.features))
 
     def process(self, events: list[TelemetryEvent]) -> list[AnomalySignal]:
         signals: list[AnomalySignal] = []
