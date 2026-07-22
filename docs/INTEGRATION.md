@@ -1,3 +1,7 @@
+> **See also:** [`HITL_AND_MODES.md`](HITL_AND_MODES.md) for the two request
+> modes, whether human approval is actually real, and how to plug in your
+> own action connector (the write-side counterpart to the translator below).
+
 # Integration: feeding CHAKRAVYUH real telemetry
 
 CHAKRAVYUH never reaches into your systems and reads your logs itself — it

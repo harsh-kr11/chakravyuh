@@ -177,8 +177,11 @@ def test_api_observe_mode_executes_nothing(tmp_path, monkeypatch):
     assert body["has_pending"] is False
     assert all(not e["executed"] for e in body["executions"])
     assert all(not e["pending"] for e in body["executions"])
-    # the plan itself is still fully computed and shown
+    # the plan itself is still fully computed and shown...
     assert body["interdiction"]["crown_jewel_protected"] is True
+    # ...but nothing actually happened, so the real outcome must say so
+    assert body["interdiction"]["crown_jewel_protected_now"] is False
+    assert body["interdiction"]["cascade_averted_now"] is False
 
 
 def test_api_respond_mode_leaves_gated_actions_pending(tmp_path, monkeypatch):
@@ -200,6 +203,8 @@ def test_api_respond_mode_leaves_gated_actions_pending(tmp_path, monkeypatch):
     ungated = [e for e in body["executions"] if not e["gated"]]
     assert all(e["pending"] and not e["executed"] for e in gated)
     assert all(e["executed"] and not e["pending"] for e in ungated)
+    # a gated action is still pending -> not actually protected yet
+    assert body["interdiction"]["crown_jewel_protected_now"] is False
 
 
 def test_api_approve_executes_pending_action(tmp_path, monkeypatch):
@@ -226,6 +231,10 @@ def test_api_approve_executes_pending_action(tmp_path, monkeypatch):
     assert all(e["executed"] and e["approved_by"] == "test-analyst" for e in gated)
     assert "ADDENDUM" in body["certin_report"]
     assert body["audit"]["ok"] is True
+    # everything approved and executed -> the *actual* outcome now matches
+    # the plan's theoretical guarantee, not just the plan on paper
+    assert body["interdiction"]["crown_jewel_protected_now"] is True
+    assert body["interdiction"]["cascade_averted_now"] is True
 
     # persisted, not just returned in-response
     refetched = client.get(f"/incidents/{db_id}").json()
@@ -253,6 +262,58 @@ def test_api_deny_leaves_action_unexecuted(tmp_path, monkeypatch):
     gated = [e for e in body["executions"] if e["gated"]]
     assert all(not e["executed"] and not e["pending"] for e in gated)
     assert "DENIED" in body["certin_report"]
+    # a required action was denied -- the *actual* outcome must say so even
+    # though the original plan (on paper) claimed full protection. This is
+    # the field any third-party API consumer should check, not
+    # crown_jewel_protected, which never changes after the fact.
+    plan = body["interdiction"]
+    assert plan["crown_jewel_protected"] is True   # unchanged (plan-level)
+    assert plan["crown_jewel_protected_now"] is False  # real, honest state
+    assert plan["cascade_averted_now"] is False
+
+
+def test_api_approve_retries_after_connector_failure(tmp_path, monkeypatch):
+    """A connector failure (e.g. a network blip) is a technical problem, not
+    a human decision -- the action must stay retryable, not get stuck."""
+    pytest.importorskip("fastapi")
+    from unittest.mock import MagicMock, patch
+
+    monkeypatch.setenv("CHAKRAVYUH_DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setenv("CHAKRAVYUH_CONNECTOR", "webhook")
+    monkeypatch.setenv("CHAKRAVYUH_WEBHOOK_URL", "https://example.invalid/hook")
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    client = TestClient(app)
+    db_id = client.post(
+        "/incidents/analyze", json={"incident_id": "INC-RETRY"}
+    ).json()["db_id"]
+
+    with patch("httpx.post", side_effect=ConnectionError("refused")):
+        first = client.post(
+            f"/incidents/{db_id}/approve", json={"approved": True, "approver": "a"},
+        )
+    assert first.status_code == 200
+    body = first.json()
+    gated = [e for e in body["executions"] if e["gated"]][0]
+    assert gated["executed"] is False
+    assert gated["pending"] is True  # stayed retryable, didn't get stuck
+    assert "refused" in gated["error"]
+    assert body["has_pending"] is True
+
+    fake_response = MagicMock(status_code=200, text="")
+    with patch("httpx.post", return_value=fake_response):
+        second = client.post(
+            f"/incidents/{db_id}/approve", json={"approved": True, "approver": "a"},
+        )
+    assert second.status_code == 200
+    body2 = second.json()
+    gated2 = [e for e in body2["executions"] if e["gated"]][0]
+    assert gated2["executed"] is True
+    assert gated2["pending"] is False
+    assert gated2["error"] is None
+    assert body2["has_pending"] is False
 
 
 def test_api_approve_with_no_pending_actions_is_400(tmp_path, monkeypatch):

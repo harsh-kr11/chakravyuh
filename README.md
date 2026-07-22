@@ -89,7 +89,9 @@ curl -s -X POST localhost:8080/incidents/analyze \
 - **`events`** (optional) — bring your own translated telemetry instead of the bundled demo events. See [`docs/INTEGRATION.md`](docs/INTEGRATION.md) for the event schema and a worked, language-agnostic translator example.
 - **`mode`** — `"observe"` computes and shows the plan but executes nothing at all (safest first look); `"respond"` (default) executes low-risk actions immediately and leaves anything human-gated **genuinely pending** — no auto-approval — until a real `POST /incidents/{id}/approve` call resolves it. There is no "fully autonomous, skip the human" mode; that's deliberate, not a missing feature.
 
-Approving a pending action carries it out via a pluggable **connector** (`chakravyuh.connectors`) — a webhook or Slack notification out of the box, `none` (simulated) by default. Ship your own by implementing `Connector` — see `docs/INTEGRATION.md`.
+Approving a pending action carries it out via a pluggable **connector** (`chakravyuh.connectors`) — a webhook or Slack notification out of the box, `none` (simulated) by default. Ship your own by implementing `Connector`.
+
+**New to the two modes or the human-approval flow?** Read [`docs/HITL_AND_MODES.md`](docs/HITL_AND_MODES.md) first — it's the plain-language explanation of what's real, how to plug in your own connector, and what "production-ready" actually means here.
 
 ### Everything in containers
 

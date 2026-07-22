@@ -175,7 +175,7 @@ def analyze(
     )
     data = result_to_dict(result, orch)
     data["mode"] = req.mode
-    data["has_pending"] = any(e["pending"] for e in data["executions"])
+    _apply_actual_outcome(data)
     data["db_id"] = store.save(req.incident_id, req.scenario, data)
     return data
 
@@ -185,6 +185,26 @@ def _get_incident_or_404(row_id: int, store: IncidentStore) -> dict[str, Any]:
     if data is None:
         raise HTTPException(status_code=404, detail=f"incident {row_id} not found")
     return data
+
+
+def _apply_actual_outcome(data: dict[str, Any]) -> None:
+    """Recompute the *actual*, not just planned, outcome from real execution
+    state. ``interdiction.crown_jewel_protected``/``cascade_averted`` reflect
+    the min-cut plan's theoretical guarantee *if fully executed* -- they do
+    NOT change if a human later denies a required action. Any API consumer
+    checking those two fields alone after a partial approval would get a
+    wrong answer, so this adds the honest, real-time equivalents.
+    """
+    executions = data["executions"]
+    all_executed = all(e["executed"] for e in executions)
+    interdiction = data["interdiction"]
+    interdiction["crown_jewel_protected_now"] = (
+        bool(interdiction["crown_jewel_protected"]) and all_executed
+    )
+    interdiction["cascade_averted_now"] = (
+        bool(interdiction["cascade_averted"]) and all_executed
+    )
+    data["has_pending"] = any(e["pending"] for e in executions)
 
 
 def _append_audit_record(
@@ -250,24 +270,46 @@ def approve(
                 ok, detail = outcome.ok, outcome.detail
             else:
                 ok, detail = True, "simulated"
-            entry.update(
-                executed=ok, pending=False, approved_by=req.approver,
-                error=None if ok else detail,
-            )
-            addendum_lines.append(
-                f"  - {action.action_type.value} -> {action.target}: "
-                f"APPROVED by {req.approver} (executed={ok})"
-            )
+            if ok:
+                entry.update(
+                    executed=True, pending=False, approved_by=req.approver, error=None,
+                )
+                addendum_lines.append(
+                    f"  - {action.action_type.value} -> {action.target}: "
+                    f"APPROVED by {req.approver} (executed=True)"
+                )
+                _append_audit_record(records, "response", "action_result", {
+                    "action": action.action_type.value, "executed": True,
+                    "approved_by": req.approver,
+                })
+            else:
+                # A connector failure is a technical problem, not a human
+                # decision -- stay pending so this specific action can be
+                # retried (e.g. once a transient network issue clears)
+                # rather than getting stuck unresolved forever.
+                entry.update(
+                    executed=False, pending=True,
+                    approved_by=req.approver, error=detail,
+                )
+                addendum_lines.append(
+                    f"  - {action.action_type.value} -> {action.target}: "
+                    f"APPROVED by {req.approver} but NOT executed -- connector "
+                    f"error ({detail}); still pending, retry with another approve call"
+                )
+                _append_audit_record(records, "response", "action_execution_failed", {
+                    "action": action.action_type.value, "approved_by": req.approver,
+                    "error": detail,
+                })
         else:
-            entry.update(executed=False, pending=False, approved_by=None)
+            entry.update(executed=False, pending=False, approved_by=None, error=None)
             addendum_lines.append(
                 f"  - {action.action_type.value} -> {action.target}: "
                 f"DENIED by {req.approver}"
             )
-        _append_audit_record(records, "response", "action_result", {
-            "action": action.action_type.value, "executed": entry["executed"],
-            "approved_by": entry["approved_by"],
-        })
+            _append_audit_record(records, "response", "action_result", {
+                "action": action.action_type.value, "executed": False,
+                "approved_by": None,
+            })
 
     data["certin_report"] += (
         "\n\nADDENDUM - human decisions recorded after initial draft:\n"
@@ -275,7 +317,7 @@ def approve(
     )
     data["audit"]["ok"] = _verify_audit_chain(records)
     data["metrics"]["mttr_steps"] = len([e for e in executions if e["executed"]])
-    data["has_pending"] = any(e.get("pending") for e in executions)
+    _apply_actual_outcome(data)
 
     store.update(row_id, data)
     return data

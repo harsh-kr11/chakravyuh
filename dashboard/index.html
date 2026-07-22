@@ -12,16 +12,20 @@
     --safe:#37D6A0; --life:#46C8E6; --dim:#3A4570; --warn:#FFC94D;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
+  html,body{margin:0;min-height:100%}
   body{
     background:radial-gradient(1200px 700px at 70% -10%, #14204d 0%, var(--bg) 55%) fixed;
     color:var(--ink);
     font-family:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
     -webkit-font-smoothing:antialiased;
+    overflow-y:auto;
   }
+  /* The page fills the viewport when it fits, and scrolls instead of
+     clipping the graph when it doesn't (short windows, browser zoom,
+     dev-tools open, a long chat/audit panel, etc). */
+  .app{display:grid;grid-template-rows:auto auto minmax(440px,1fr) auto;min-height:100vh;gap:1px}
   .eyebrow{font:600 11px/1.4 system-ui;letter-spacing:.28em;text-transform:uppercase;color:var(--saffron)}
   h1{font:700 30px/1 system-ui;letter-spacing:.02em;margin:.15em 0 0}
-  .app{display:grid;grid-template-rows:auto auto 1fr auto;height:100vh;gap:1px}
   /* ---- top bar ---- */
   .topbar{display:flex;align-items:center;justify-content:space-between;
     padding:16px 22px;border-bottom:1px solid var(--line);background:linear-gradient(var(--bg2),transparent);flex-wrap:wrap;gap:10px}
@@ -51,11 +55,11 @@
   .seg-btn.on{background:var(--saffron);color:#1a1200}
   .mode-desc{font-size:11px;color:var(--muted)}
   /* ---- middle ---- */
-  .main{display:grid;grid-template-columns:300px 1fr 320px;gap:1px;overflow:hidden;min-height:0}
-  .rail{background:var(--panel2);padding:16px;overflow:auto}
+  .main{display:grid;grid-template-columns:300px 1fr 320px;gap:1px;min-height:440px}
+  .rail{background:var(--panel2);padding:16px;overflow:auto;max-height:100%}
   .rail h2{font:600 10px/1 system-ui;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);margin:2px 0 14px}
-  .center{background:var(--bg);position:relative;display:flex;flex-direction:column;min-width:0}
-  svg{width:100%;height:100%;display:block}
+  .center{background:var(--bg);position:relative;display:flex;flex-direction:column;min-width:0;min-height:440px}
+  svg{width:100%;height:100%;display:block;min-height:380px}
   /* stepper */
   .beats{display:flex;gap:6px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
   .beat{font:600 10px system-ui;letter-spacing:.06em;color:var(--muted);border:1px solid var(--line);
@@ -188,7 +192,7 @@
     <!-- CENTER -->
     <div class="center">
       <div class="beats" id="beats"></div>
-      <div style="position:relative;flex:1;min-height:0">
+      <div style="position:relative;flex:1;min-height:380px">
         <div class="banner" id="banner"></div>
         <svg id="map" viewBox="0 0 640 520" preserveAspectRatio="xMidYMid meet"></svg>
         <div class="legend">
@@ -495,16 +499,21 @@ async function run(){
 
 function finishContainment(){
   setBeat(4);
+  // The server, not this client, is the source of truth for whether the
+  // crown jewel is *actually* protected right now -- it reflects every
+  // action's real execution state, not just the theoretical plan.
+  const protectedOk = I.crown_jewel_protected_now;
   const deniedGated = R.executions.some(e => e.gated && !e.executed && !e.pending);
-  const protectedOk = I.crown_jewel_protected && !deniedGated;
   glowNode(S.crown_jewel, protectedOk ? 'var(--safe)' : 'var(--alarm)');
   glowNode(S.hospital, 'var(--safe)');
   if (deniedGated) {
     banner('⚠ A required action was denied — crown jewel protection is not guaranteed', 'warn');
-  } else {
+  } else if (protectedOk) {
     banner('✔ Attack contained · crown jewel safe · hospital power preserved', 'safe');
+  } else {
+    banner('⚠ Not all actions have executed yet — crown jewel protection is not guaranteed', 'warn');
   }
-  status(deniedGated ? 'Contained (partial)' : 'Contained', null);
+  status(protectedOk ? 'Contained' : 'Contained (partial)', null);
   setBeat(5);
   document.getElementById('runBtn').disabled = false; running = false;
   updateMetrics(protectedOk);
@@ -513,7 +522,7 @@ function finishContainment(){
 function updateMetrics(protectedOk){
   const prot = document.getElementById('mProt'); const casc = document.getElementById('mCasc');
   if (prot) prot.textContent = protectedOk ? 'SAFE' : 'AT RISK';
-  if (casc) casc.textContent = I.cascade_averted && protectedOk ? 'AVERTED' : '—';
+  if (casc) casc.textContent = I.cascade_averted_now ? 'AVERTED' : '—';
 }
 
 function renderPlan(){
@@ -526,15 +535,17 @@ function renderPlan(){
       tag = a.requires_human_gate ? 'WOULD NEED APPROVAL' : 'WOULD RUN AUTOMATICALLY';
       cls = a.requires_human_gate ? 'pending-tag' : 'auto';
     } else if (a.requires_human_gate) {
-      if (exec.pending) { tag = 'AWAITING APPROVAL'; cls = 'pending-tag'; }
+      if (exec.pending) { tag = exec.error ? 'APPROVED · RETRY NEEDED' : 'AWAITING APPROVAL'; cls = 'pending-tag'; }
       else if (exec.executed) { tag = 'APPROVED · DONE'; cls = 'done-tag'; }
       else { tag = 'DENIED'; cls = 'denied-tag'; }
     } else {
       tag = exec.executed ? 'DONE' : 'AUTONOMOUS';
       cls = exec.executed ? 'done-tag' : 'auto';
     }
+    const errLine = exec.pending && exec.error
+      ? `<div style="font-size:10px;color:var(--alarm);width:100%;margin-top:2px">connector error: ${exec.error}</div>` : '';
     return `<div class="action"><span class="tt">${a.action_type.replace(/_/g, ' ')}</span>
-      <span>${tgt}</span><span class="gate ${cls}">${tag}</span></div>`;
+      <span>${tgt}</span><span class="gate ${cls}">${tag}</span>${errLine}</div>`;
   }).join('');
   const smart = I.availability_cost, naive = I.baseline_availability_cost;
   const smartPct = Math.max(4, smart / naive * 100), naivePct = 100;
@@ -613,7 +624,17 @@ async function resolvePending(approved){
   R = updated; I = R.interdiction;
   R.executions.filter(e => e.gated).forEach(applyExecutedVisual);
   renderPlan();
-  finishContainment();
+
+  if (R.has_pending) {
+    // Approved, but the connector failed (e.g. a network blip) -- this is
+    // a technical problem, not a final decision, so it's still pending and
+    // retryable. Surface the error; don't claim containment finished.
+    const failed = R.executions.find(e => e.gated && e.pending && e.error);
+    banner('⚠ Action approved but not executed — ' + (failed ? failed.error : 'connector error') + '. Retry below.', 'warn');
+    status('Approved, awaiting successful execution', 'live');
+  } else {
+    finishContainment();
+  }
 }
 
 /* ---------- history tab ---------- */
