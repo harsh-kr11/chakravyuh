@@ -95,3 +95,17 @@ class IncidentStore:
                 "SELECT result_json FROM incidents WHERE id = ?", (row_id,)
             ).fetchone()
         return json.loads(row["result_json"]) if row else None
+
+    def update(self, row_id: int, result: dict[str, Any]) -> bool:
+        """Overwrite a stored incident's result blob in place (e.g. after a
+        human approval/denial resolves a pending action). Summary columns
+        (crown_jewel_protected etc.) describe the *plan*, not the approval
+        outcome, so they are intentionally left unchanged. Returns False if
+        no such row exists.
+        """
+        with self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE incidents SET result_json = ? WHERE id = ?",
+                (json.dumps(result, default=str), row_id),
+            )
+            return cur.rowcount > 0

@@ -9,7 +9,7 @@
     --bg:#0B1026; --bg2:#0E1533; --panel:#111A3D; --panel2:#0d1430;
     --ink:#E8ECFF; --muted:#8790BE; --line:#232C55;
     --saffron:#FF9933; --gold:#FFC94D; --alarm:#FF5A5A;
-    --safe:#37D6A0; --life:#46C8E6; --dim:#3A4570;
+    --safe:#37D6A0; --life:#46C8E6; --dim:#3A4570; --warn:#FFC94D;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -21,11 +21,11 @@
   }
   .eyebrow{font:600 11px/1.4 system-ui;letter-spacing:.28em;text-transform:uppercase;color:var(--saffron)}
   h1{font:700 30px/1 system-ui;letter-spacing:.02em;margin:.15em 0 0}
-  .app{display:grid;grid-template-rows:auto 1fr auto;height:100vh;gap:1px}
+  .app{display:grid;grid-template-rows:auto auto 1fr auto;height:100vh;gap:1px}
   /* ---- top bar ---- */
   .topbar{display:flex;align-items:center;justify-content:space-between;
-    padding:16px 22px;border-bottom:1px solid var(--line);background:linear-gradient(var(--bg2),transparent)}
-  .status{display:flex;gap:18px;align-items:center;font:500 12px system-ui;color:var(--muted)}
+    padding:16px 22px;border-bottom:1px solid var(--line);background:linear-gradient(var(--bg2),transparent);flex-wrap:wrap;gap:10px}
+  .status{display:flex;gap:18px;align-items:center;font:500 12px system-ui;color:var(--muted);flex-wrap:wrap}
   .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:7px;background:var(--safe);box-shadow:0 0 10px var(--safe)}
   .dot.live{background:var(--saffron);box-shadow:0 0 10px var(--saffron);animation:pulse 1.6s infinite}
   .dot.bad{background:var(--alarm);box-shadow:0 0 10px var(--alarm)}
@@ -38,8 +38,18 @@
   button.ghost:hover{background:var(--line);color:var(--ink)}
   button.approve{border-color:var(--life);color:var(--life)}
   button.approve:hover{background:var(--life);color:#04222b}
+  button.deny{border-color:var(--alarm);color:var(--alarm)}
+  button.deny:hover{background:var(--alarm);color:#2a0a0a}
   .apilink{background:none;border:none;color:var(--muted);text-decoration:underline;text-underline-offset:2px;cursor:pointer;font:500 11px system-ui;padding:0}
   .apilink:hover{color:var(--ink)}
+  /* mode toggle */
+  .modebar{display:flex;align-items:center;gap:12px;padding:10px 22px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  .modebar .lab{font:600 10px system-ui;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  .segmented{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg-btn{border:none;border-radius:0;padding:7px 14px;font:600 11px system-ui;background:transparent;color:var(--muted)}
+  .seg-btn:hover{background:var(--line);color:var(--ink)}
+  .seg-btn.on{background:var(--saffron);color:#1a1200}
+  .mode-desc{font-size:11px;color:var(--muted)}
   /* ---- middle ---- */
   .main{display:grid;grid-template-columns:300px 1fr 320px;gap:1px;overflow:hidden;min-height:0}
   .rail{background:var(--panel2);padding:16px;overflow:auto}
@@ -68,10 +78,13 @@
   /* interdiction card */
   .idx{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
   .idx .title{font:600 11px system-ui;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
-  .action{display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12px}
+  .action{display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12px;flex-wrap:wrap}
   .action .tt{color:var(--saffron);font-weight:700}
   .gate{font-size:9px;letter-spacing:.08em;border:1px solid var(--life);color:var(--life);border-radius:5px;padding:2px 6px;margin-left:auto;white-space:nowrap}
   .auto{border-color:var(--safe);color:var(--safe)}
+  .done-tag{border-color:var(--safe);color:var(--safe)}
+  .pending-tag{border-color:var(--warn);color:var(--warn)}
+  .denied-tag{border-color:var(--alarm);color:var(--alarm)}
   .bars{margin-top:14px}
   .bar{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:11px}
   .bar .lab{width:64px;color:var(--muted)}
@@ -85,8 +98,13 @@
   .metric .n{font:700 20px system-ui}
   .metric .l{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:2px}
   .ok{color:var(--safe)} .bad{color:var(--alarm)}
+  .approve-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center}
+  .approve-row input{flex:1;min-width:110px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--ink);
+    padding:9px 11px;font:500 11px system-ui}
+  .approve-row input:focus{outline:none;border-color:var(--saffron)}
+  .observe-note{font-size:11px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;padding:10px;margin-top:12px}
   /* ---- bottom ---- */
-  .bottom{background:var(--panel2);border-top:1px solid var(--line);display:grid;grid-template-rows:auto 1fr;max-height:260px}
+  .bottom{background:var(--panel2);border-top:1px solid var(--line);display:grid;grid-template-rows:auto 1fr;max-height:280px}
   .tabs{display:flex;gap:2px;padding:10px 16px 0;flex-wrap:wrap}
   .tab{font:600 11px system-ui;letter-spacing:.06em;color:var(--muted);padding:8px 14px;border:1px solid var(--line);
     border-bottom:none;border-radius:8px 8px 0 0;cursor:pointer}
@@ -104,6 +122,7 @@
   .banner.show{opacity:1}
   .banner.safe{background:rgba(55,214,160,.14);border-color:var(--safe);color:#c7ffe9}
   .banner.error{background:rgba(255,90,90,.18);border-color:var(--alarm);color:#ffd0d0}
+  .banner.warn{background:rgba(255,201,77,.16);border-color:var(--warn);color:#fff2cf}
   .legend{position:absolute;right:14px;bottom:12px;font:500 10px system-ui;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
   .legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:middle}
   /* history */
@@ -114,16 +133,20 @@
   .hist-item .hi-ok{color:var(--safe)}
   .hist-item .hi-bad{color:var(--alarm)}
   .empty{color:var(--muted);font-size:12px;padding:8px 2px}
-  /* copilot */
-  .copilot-body{display:flex;flex-direction:column;gap:10px;height:100%}
-  .copilot-text{font-size:12px;line-height:1.6;color:#cdd6ff;white-space:pre-wrap}
-  .cites{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  /* copilot chat */
+  .copilot-body{display:flex;flex-direction:column;height:100%;min-height:0}
+  .chat-thread{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-bottom:8px}
+  .chat-msg{max-width:85%;font-size:12px;line-height:1.6;padding:9px 12px;border-radius:10px;white-space:pre-wrap}
+  .chat-msg.user{align-self:flex-end;background:var(--saffron);color:#1a1200;font-weight:600}
+  .chat-msg.bot{align-self:flex-start;background:var(--panel2);border:1px solid var(--line);color:#cdd6ff}
+  .chat-msg.bot.thinking{color:var(--muted);font-style:italic}
+  .cites{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .cite-chip{font-size:10px;border:1px solid var(--life);color:var(--life);border-radius:6px;padding:3px 7px}
-  .ask-row{display:flex;gap:8px;margin-top:auto;padding-top:10px}
+  .ask-row{display:flex;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
   .ask-row input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--ink);
     padding:9px 11px;font:500 12px system-ui}
   .ask-row input:focus{outline:none;border-color:var(--saffron)}
-  .llm-off{font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:2px 6px;display:inline-block;margin-bottom:8px}
+  .llm-off{font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:2px 6px;display:inline-block;margin-bottom:6px}
   @media (max-width:920px){.main{grid-template-columns:1fr}.rail{display:none}}
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -142,6 +165,15 @@
       <button class="ghost" id="replayBtn">Replay</button>
       <button id="runBtn" disabled>Run interdiction ▶</button>
     </div>
+  </div>
+
+  <div class="modebar">
+    <span class="lab">Mode</span>
+    <div class="segmented">
+      <button class="seg-btn" data-mode="observe">Observe only</button>
+      <button class="seg-btn on" data-mode="respond">Observe + Act</button>
+    </div>
+    <span class="mode-desc" id="modeDesc">Low-risk actions run automatically; anything touching OT waits for a real approval below.</span>
   </div>
 
   <div class="main">
@@ -188,7 +220,7 @@
       <div class="audit" id="auditBody" style="display:none"></div>
       <div id="historyBody" style="display:none"></div>
       <div class="copilot-body" id="copilotBody" style="display:none">
-        <div id="copilotOut" class="copilot-text">Run an incident, then ask the copilot to explain it.</div>
+        <div class="chat-thread" id="chatThread"></div>
         <div class="ask-row">
           <input id="askInput" placeholder="Ask about this incident (e.g. why was engineer_cred revoked?)" />
           <button class="ghost" id="askBtn">Ask</button>
@@ -220,10 +252,23 @@ async function api(path, opts){
   return res.json();
 }
 
+/* ---------- mode toggle ---------- */
+let currentMode = 'respond';
+const MODE_DESC = {
+  observe: 'Nothing is executed, not even low-risk actions — just the detected anomalies, the plan CHAKRAVYUH would take, and the report.',
+  respond: 'Low-risk actions run automatically; anything touching OT waits for a real approval below.',
+};
+document.querySelectorAll('.seg-btn').forEach(b => b.addEventListener('click', () => {
+  currentMode = b.dataset.mode;
+  document.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('on', x === b));
+  document.getElementById('modeDesc').textContent = MODE_DESC[currentMode];
+}));
+
 /* ---------- state ---------- */
 let S = null;          // scenario: {nodes, edges, crown_jewel, hospital}
 let R = null, I = null; // current incident result + its interdiction plan
 let currentDbId = null;
+let qaHistory = [];     // [{question, answer}] -- sent back to the copilot for continuity
 let edgeEls = {}, nodeEls = {}, pos = {};
 const svg = document.getElementById('map');
 const NS = 'http://www.w3.org/2000/svg';
@@ -233,7 +278,7 @@ function status(txt, mode){ // mode: 'ok' | 'live' | 'bad'
   document.getElementById('statusText').textContent = txt;
   document.getElementById('statusDot').className = 'dot' + (mode === 'live' ? ' live' : mode === 'bad' ? ' bad' : '');
 }
-function banner(txt, kind){ // kind: 'safe' | 'error' | undefined
+function banner(txt, kind){ // kind: 'safe' | 'error' | 'warn' | undefined
   const b = document.getElementById('banner');
   b.textContent = txt;
   b.className = 'banner show' + (kind ? ' ' + kind : '');
@@ -345,6 +390,23 @@ function reset(){
     l.setAttribute('stroke', e.protected ? 'var(--life)' : '#2b356b');
     l.setAttribute('stroke-width', e.protected ? 2.2 : 1.6); l.setAttribute('stroke-dasharray', e.protected ? '5 5' : 'none'); });
   status('System nominal', null); setBeat(-1);
+  qaHistory = [];
+  document.getElementById('chatThread').innerHTML = '';
+}
+
+/* ---------- action <-> graph element helpers ---------- */
+function actionEdgeKey(action){
+  return Array.isArray(action.target) ? action.target.join('>') : null;
+}
+function applyExecutedVisual(execution){
+  const action = execution.action;
+  if (!execution.executed) return;
+  if (Array.isArray(action.target)) {
+    severEdgeVisual(action.target[0], action.target[1]);
+  } else {
+    S.edges.filter(e => e.src === action.target).forEach(e => severEdgeVisual(e.src, e.dst));
+    glowNode(action.target, 'var(--safe)');
+  }
 }
 
 /* ---------- run a live incident ---------- */
@@ -371,7 +433,10 @@ async function run(){
 
   let data;
   try {
-    data = await api('/incidents/analyze', {method: 'POST', body: JSON.stringify({incident_id: 'INC-' + Date.now()})});
+    data = await api('/incidents/analyze', {
+      method: 'POST',
+      body: JSON.stringify({incident_id: 'INC-' + Date.now(), mode: currentMode}),
+    });
   } catch (err) {
     banner('✕ Could not reach the API: ' + err.message, 'error');
     status('API unreachable', 'bad');
@@ -381,8 +446,6 @@ async function run(){
   R = data; I = R.interdiction; currentDbId = R.db_id;
   await renderHistory();
 
-  const cutEdges = new Set(I.actions.filter(a => Array.isArray(a.target)).map(a => a.target.join('>')));
-  const revoked = new Set(I.actions.filter(a => !Array.isArray(a.target)).map(a => a.target));
   const PATH = buildAttackPath(R.attacker_frontier);
   const predictedNext = predictedNextHops(R.attacker_frontier);
 
@@ -410,21 +473,86 @@ async function run(){
   feedCard('Cascade · cross-sector', R.cascade.narrative, true); await wait(1300);
 
   setBeat(3);
-  renderPlan(cutEdges, revoked, predictedNext); await wait(400);
-  banner('Interdiction ready · awaiting analyst approval for OT action');
-  status('Containment proposed', 'live');
+  // Actions that don't need a human are, by now, already really executed by
+  // the backend -- reflect that immediately, not as a later animation.
+  R.executions.forEach(applyExecutedVisual);
+  renderPlan();
+  await wait(200);
+
+  if (currentMode === 'observe') {
+    banner('Observe-only: plan computed, nothing executed', 'warn');
+    status('Observed, no action taken', null);
+    document.getElementById('runBtn').disabled = false; running = false;
+    setBeat(5);
+  } else if (R.has_pending) {
+    banner('Interdiction ready · awaiting real analyst approval for OT action');
+    status('Containment proposed', 'live');
+    document.getElementById('runBtn').disabled = false; running = false;
+  } else {
+    finishContainment();
+  }
 }
 
-function renderPlan(cutEdges, revoked, predictedNext){
+function finishContainment(){
+  setBeat(4);
+  const deniedGated = R.executions.some(e => e.gated && !e.executed && !e.pending);
+  const protectedOk = I.crown_jewel_protected && !deniedGated;
+  glowNode(S.crown_jewel, protectedOk ? 'var(--safe)' : 'var(--alarm)');
+  glowNode(S.hospital, 'var(--safe)');
+  if (deniedGated) {
+    banner('⚠ A required action was denied — crown jewel protection is not guaranteed', 'warn');
+  } else {
+    banner('✔ Attack contained · crown jewel safe · hospital power preserved', 'safe');
+  }
+  status(deniedGated ? 'Contained (partial)' : 'Contained', null);
+  setBeat(5);
+  document.getElementById('runBtn').disabled = false; running = false;
+  updateMetrics(protectedOk);
+}
+
+function updateMetrics(protectedOk){
+  const prot = document.getElementById('mProt'); const casc = document.getElementById('mCasc');
+  if (prot) prot.textContent = protectedOk ? 'SAFE' : 'AT RISK';
+  if (casc) casc.textContent = I.cascade_averted && protectedOk ? 'AVERTED' : '—';
+}
+
+function renderPlan(){
   const host = document.getElementById('planHost');
-  const acts = I.actions.map(a => {
-    const gated = a.requires_human_gate;
+  const acts = I.actions.map((a, i) => {
     const tgt = Array.isArray(a.target) ? a.target.join(' → ') : a.target;
+    const exec = R.executions[i] || {};
+    let tag, cls;
+    if (R.mode === 'observe') {
+      tag = a.requires_human_gate ? 'WOULD NEED APPROVAL' : 'WOULD RUN AUTOMATICALLY';
+      cls = a.requires_human_gate ? 'pending-tag' : 'auto';
+    } else if (a.requires_human_gate) {
+      if (exec.pending) { tag = 'AWAITING APPROVAL'; cls = 'pending-tag'; }
+      else if (exec.executed) { tag = 'APPROVED · DONE'; cls = 'done-tag'; }
+      else { tag = 'DENIED'; cls = 'denied-tag'; }
+    } else {
+      tag = exec.executed ? 'DONE' : 'AUTONOMOUS';
+      cls = exec.executed ? 'done-tag' : 'auto';
+    }
     return `<div class="action"><span class="tt">${a.action_type.replace(/_/g, ' ')}</span>
-      <span>${tgt}</span><span class="gate ${gated ? '' : 'auto'}">${gated ? 'HUMAN GATE' : 'AUTONOMOUS'}</span></div>`;
+      <span>${tgt}</span><span class="gate ${cls}">${tag}</span></div>`;
   }).join('');
   const smart = I.availability_cost, naive = I.baseline_availability_cost;
   const smartPct = Math.max(4, smart / naive * 100), naivePct = 100;
+
+  let actionArea = '';
+  if (currentMode === 'observe') {
+    actionArea = `<div class="observe-note">Observe-only mode: this is what CHAKRAVYUH would do. Nothing above was actually executed. Switch to "Observe + Act" and run again to act on it.</div>`;
+  } else if (R.has_pending) {
+    actionArea = `
+      <div class="approve-row">
+        <input id="approverInput" value="duty-analyst" placeholder="Approver name" />
+      </div>
+      <div class="approve-row">
+        <button class="approve" id="approveBtn" style="flex:1">✔ Approve pending action(s)</button>
+        <button class="deny" id="denyBtn" style="flex:1">✕ Deny</button>
+      </div>`;
+  }
+
   host.innerHTML = `
    <div class="idx">
      <div class="title">Minimal-disruption cut</div>
@@ -434,7 +562,7 @@ function renderPlan(cutEdges, revoked, predictedNext){
        <div class="bar"><span class="lab">Naive</span><span class="track"><span class="fill naive" id="fNaive"></span></span><span class="num bad">${naive}</span></div>
      </div>
      <div style="font-size:10px;color:var(--muted);margin-top:8px">availability cost (lower is better). Naive "isolate everything" severs the hospital lifeline.</div>
-     <button class="approve" id="approveBtn" style="width:100%;margin-top:12px">✔ Approve &amp; contain</button>
+     ${actionArea}
    </div>
    <div class="metrics">
      <div class="metric"><div class="n ok" id="mProt">—</div><div class="l">Crown jewel</div></div>
@@ -443,9 +571,17 @@ function renderPlan(cutEdges, revoked, predictedNext){
      <div class="metric"><div class="n" id="mMttr">${R.metrics.mttr_steps}</div><div class="l">MTTR actions</div></div>
    </div>`;
   setTimeout(() => { document.getElementById('fSmart').style.width = smartPct + '%'; document.getElementById('fNaive').style.width = naivePct + '%'; }, 80);
-  document.getElementById('approveBtn').addEventListener('click', () => contain(cutEdges, revoked, predictedNext));
+
+  const approveBtn = document.getElementById('approveBtn');
+  const denyBtn = document.getElementById('denyBtn');
+  if (approveBtn) approveBtn.addEventListener('click', () => resolvePending(true));
+  if (denyBtn) denyBtn.addEventListener('click', () => resolvePending(false));
 
   document.getElementById('reportBody').textContent = R.certin_report;
+  renderAudit();
+}
+
+function renderAudit(){
   const auditHost = document.getElementById('auditBody');
   auditHost.innerHTML = R.audit.records.map(r =>
     `<div><span class="seq">#${r.seq}</span> <span class="h">${r.actor}·${r.event_type}</span> ` +
@@ -453,20 +589,31 @@ function renderPlan(cutEdges, revoked, predictedNext){
     `<div style="margin-top:8px;color:var(--safe)">chain verified: ${R.audit.ok} · ${R.audit.records.length} records</div>`;
 }
 
-async function contain(cutEdges, revoked, predictedNext){
-  const b = document.getElementById('approveBtn'); b.disabled = true; b.textContent = 'Containment executed';
-  setBeat(4);
-  cutEdges.forEach(k => { const [s, d] = k.split('>'); severEdgeVisual(s, d); });
-  revoked.forEach(id => { S.edges.filter(e => e.src === id).forEach(e => severEdgeVisual(e.src, e.dst)); glowNode(id, 'var(--safe)'); });
-  predictedNext.forEach(id => { const e = edgeEls[R.attacker_frontier[R.attacker_frontier.length - 1] + '>' + id]; if (e) { e.style.filter = ''; e.setAttribute('stroke', '#37424f'); } });
-  await wait(500);
-  glowNode(S.crown_jewel, 'var(--safe)'); glowNode(S.hospital, 'var(--safe)');
-  document.getElementById('mProt').textContent = I.crown_jewel_protected ? 'SAFE' : 'AT RISK';
-  document.getElementById('mCasc').textContent = I.cascade_averted ? 'AVERTED' : '—';
-  banner('✔ Attack contained · crown jewel safe · hospital power preserved', 'safe');
-  status('Contained', null);
-  await wait(500); setBeat(5);
-  document.getElementById('runBtn').disabled = false; running = false;
+/* ---------- real approve/deny -> real backend call ---------- */
+async function resolvePending(approved){
+  const approveBtn = document.getElementById('approveBtn');
+  const denyBtn = document.getElementById('denyBtn');
+  const approver = (document.getElementById('approverInput') || {}).value || 'duty-analyst';
+  if (approveBtn) approveBtn.disabled = true;
+  if (denyBtn) denyBtn.disabled = true;
+
+  let updated;
+  try {
+    updated = await api(`/incidents/${currentDbId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({approved, approver}),
+    });
+  } catch (err) {
+    banner('✕ Could not resolve the pending action: ' + err.message, 'error');
+    if (approveBtn) approveBtn.disabled = false;
+    if (denyBtn) denyBtn.disabled = false;
+    return;
+  }
+
+  R = updated; I = R.interdiction;
+  R.executions.filter(e => e.gated).forEach(applyExecutedVisual);
+  renderPlan();
+  finishContainment();
 }
 
 /* ---------- history tab ---------- */
@@ -491,56 +638,67 @@ async function renderHistory(){
 async function loadHistoricalIncident(id){
   let data;
   try { data = await api('/incidents/' + id); } catch (err) { banner('✕ ' + err.message, 'error'); return; }
-  R = data; I = R.interdiction; currentDbId = data.db_id || Number(id);
   reset();
-  const cutEdges = new Set(I.actions.filter(a => Array.isArray(a.target)).map(a => a.target.join('>')));
-  const revoked = new Set(I.actions.filter(a => !Array.isArray(a.target)).map(a => a.target));
+  R = data; I = R.interdiction; currentDbId = data.db_id || Number(id);
+  currentMode = R.mode || 'respond';
+  document.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('on', x.dataset.mode === currentMode));
+  document.getElementById('modeDesc').textContent = MODE_DESC[currentMode];
+
   R.anomalies.forEach(s => glowNode(s.asset_id, 'var(--alarm)'));
-  cutEdges.forEach(k => { const [s, d] = k.split('>'); severEdgeVisual(s, d); });
-  revoked.forEach(rid => glowNode(rid, 'var(--safe)'));
-  glowNode(S.crown_jewel, I.crown_jewel_protected ? 'var(--safe)' : 'var(--alarm)');
-  glowNode(S.hospital, 'var(--safe)');
-  renderPlan(cutEdges, revoked, []);
-  document.getElementById('mProt').textContent = I.crown_jewel_protected ? 'SAFE' : 'AT RISK';
-  document.getElementById('mCasc').textContent = I.cascade_averted ? 'AVERTED' : '—';
-  setBeat(5);
-  banner(`Loaded incident #${id} from history`, I.crown_jewel_protected ? 'safe' : 'error');
-  status('Viewing history · #' + id, null);
+  R.executions.forEach(applyExecutedVisual);
+  renderPlan();
+  if (!R.has_pending) finishContainment();
+  else { banner(`Loaded incident #${id} · still awaiting approval`, 'warn'); status('Viewing history · #' + id, null); }
   selectTab('report');
 }
 
-/* ---------- copilot tab ---------- */
+/* ---------- copilot tab: real running conversation ---------- */
+function appendChat(role, text, citations, llmUsed){
+  const thread = document.getElementById('chatThread');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  const offNote = role === 'bot' && llmUsed === false
+    ? '<div class="llm-off">No LLM provider configured — showing retrieved context only.</div>' : '';
+  const cites = (citations || []).map(c => `<span class="cite-chip">${c}</span>`).join('');
+  div.innerHTML = offNote + escapeHtml(text) + (cites ? `<div class="cites">${cites}</div>` : '');
+  thread.appendChild(div);
+  thread.scrollTop = thread.scrollHeight;
+  return div;
+}
+function escapeHtml(s){ const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
 document.getElementById('briefBtn').addEventListener('click', async () => {
-  const out = document.getElementById('copilotOut');
-  if (!currentDbId) { out.textContent = 'Run or load an incident first.'; return; }
-  out.textContent = 'Asking the copilot…';
+  if (!currentDbId) { appendChat('bot', 'Run or load an incident first.'); return; }
+  const thinking = appendChat('bot', 'Reading the incident…', [], true);
+  thinking.classList.add('thinking');
   try {
     const res = await api(`/incidents/${currentDbId}/briefing`);
-    renderCopilotResult(res);
-  } catch (err) { out.textContent = 'Copilot error: ' + err.message; }
+    thinking.remove();
+    appendChat('bot', res.text, res.citations, res.llm_used);
+    qaHistory.push({question: '(requested an initial briefing)', answer: res.text});
+  } catch (err) { thinking.remove(); appendChat('bot', 'Copilot error: ' + err.message); }
 });
 document.getElementById('askBtn').addEventListener('click', askCopilot);
 document.getElementById('askInput').addEventListener('keydown', e => { if (e.key === 'Enter') askCopilot(); });
 async function askCopilot(){
   const input = document.getElementById('askInput');
   const q = input.value.trim();
-  const out = document.getElementById('copilotOut');
-  if (!currentDbId) { out.textContent = 'Run or load an incident first.'; return; }
   if (!q) return;
-  out.textContent = 'Asking the copilot…';
+  if (!currentDbId) { appendChat('bot', 'Run or load an incident first.'); return; }
+  appendChat('user', q);
+  input.value = '';
+  const thinking = appendChat('bot', 'Thinking…', [], true);
+  thinking.classList.add('thinking');
   try {
-    const res = await api(`/incidents/${currentDbId}/ask`, {method: 'POST', body: JSON.stringify({question: q})});
-    renderCopilotResult(res);
-    input.value = '';
-  } catch (err) { out.textContent = 'Copilot error: ' + err.message; }
+    const res = await api(`/incidents/${currentDbId}/ask`, {
+      method: 'POST',
+      body: JSON.stringify({question: q, history: qaHistory}),
+    });
+    thinking.remove();
+    appendChat('bot', res.text, res.citations, res.llm_used);
+    qaHistory.push({question: q, answer: res.text});
+  } catch (err) { thinking.remove(); appendChat('bot', 'Copilot error: ' + err.message); }
 }
-function renderCopilotResult(res){
-  const out = document.getElementById('copilotOut');
-  const offNote = res.llm_used ? '' : '<div class="llm-off">No LLM provider configured — showing retrieved context only. Set CHAKRAVYUH_LLM_PROVIDER + an API key to enable full answers.</div>';
-  const cites = (res.citations || []).map(c => `<span class="cite-chip">${c}</span>`).join('');
-  out.innerHTML = offNote + `<div>${escapeHtml(res.text)}</div>` + (cites ? `<div class="cites">${cites}</div>` : '');
-}
-function escapeHtml(s){ const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 /* ---------- tabs ---------- */
 function selectTab(name){

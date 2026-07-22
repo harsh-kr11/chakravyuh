@@ -25,6 +25,7 @@ from .agents import (
     auto_approve,
 )
 from .agents.response import GateFn
+from .connectors.base import Connector
 from .graph import AttackGraph
 from .schemas import (
     CascadeAssessment,
@@ -52,13 +53,14 @@ class Orchestrator:
         self,
         config: AgentConfig | None = None,
         gate: GateFn = auto_approve,
+        connector: Connector | None = None,
     ) -> None:
         self.config = config or AgentConfig()
         self.detection = DetectionAgent(self.config)
         self.attribution = AttributionAgent(self.config)
         self.cascade = CascadeAgent(self.config)
         self.interdiction = InterdictionAgent(self.config)
-        self.response = ResponseAgent(self.config, gate=gate)
+        self.response = ResponseAgent(self.config, gate=gate, connector=connector)
         self.compliance = ComplianceAgent(self.config)
         self.audit = AuditAgent(self.config)
 
@@ -68,6 +70,7 @@ class Orchestrator:
         events: list[TelemetryEvent],
         crown_jewel: str,
         incident_id: str = "INC-0001",
+        observe_only: bool = False,
     ) -> PipelineResult:
         # 1. detection
         signals = self.detection.process(events)
@@ -108,17 +111,30 @@ class Orchestrator:
                 self.audit.log("response", "action_intent",
                                {"action": action.action_type.value,
                                 "target": str(action.target),
-                                "gated": action.requires_human_gate})
+                                "gated": action.requires_human_gate,
+                                "observe_only": observe_only})
             except Exception:  # pragma: no cover - defensive
                 # Do not execute an unlogged action.
                 continue
-            result = self.response.process([action])[0]
+
+            if observe_only:
+                result = ExecutionResult(
+                    action=action, executed=False,
+                    gated=action.requires_human_gate,
+                )
+                self.audit.log("response", "action_observed_only",
+                               {"action": action.action_type.value})
+            else:
+                result = self.response.process([action], incident_id=incident_id)[0]
+                self.audit.log(
+                    "response",
+                    "action_pending" if result.pending else "action_result",
+                    {"action": action.action_type.value,
+                     "executed": result.executed,
+                     "gated": result.gated,
+                     "approved_by": result.approved_by},
+                )
             executions.append(result)
-            self.audit.log("response", "action_result",
-                           {"action": action.action_type.value,
-                            "executed": result.executed,
-                            "gated": result.gated,
-                            "approved_by": result.approved_by})
 
         # 6. compliance report
         report = self.compliance.draft_certin_report(ctx, cascade, plan)
@@ -143,11 +159,14 @@ class Orchestrator:
             mttr_steps=len([e for e in executions if e.executed]),
         )
 
-    def run_adapter(self, adapter, incident_id: str = "INC-0001") -> PipelineResult:
+    def run_adapter(
+        self, adapter, incident_id: str = "INC-0001", observe_only: bool = False
+    ) -> PipelineResult:
         """Run the pipeline from any InfrastructureAdapter."""
         return self.run(
             adapter.build_graph(),
             adapter.stream_events(),
             adapter.crown_jewel(),
             incident_id=incident_id,
+            observe_only=observe_only,
         )

@@ -130,3 +130,191 @@ def test_api_copilot_endpoints(tmp_path, monkeypatch):
     assert isinstance(ask.json()["text"], str)
 
     assert client.get("/incidents/999999/briefing").status_code == 404
+
+
+def test_api_ask_with_history(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("sklearn")
+    monkeypatch.setenv("CHAKRAVYUH_DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setenv("CHAKRAVYUH_LLM_PROVIDER", "none")
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    client = TestClient(app)
+    db_id = client.post(
+        "/incidents/analyze", json={"incident_id": "INC-CHAT"}
+    ).json()["db_id"]
+
+    resp = client.post(
+        f"/incidents/{db_id}/ask",
+        json={
+            "question": "and what about the domain controller?",
+            "history": [
+                {"question": "why was engineer_cred revoked?",
+                 "answer": "it was part of the attacker's frontier."},
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    assert isinstance(resp.json()["text"], str)
+
+
+def test_api_observe_mode_executes_nothing(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    monkeypatch.setenv("CHAKRAVYUH_DB_PATH", str(tmp_path / "test.db"))
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    client = TestClient(app)
+    resp = client.post(
+        "/incidents/analyze",
+        json={"incident_id": "INC-OBSERVE", "mode": "observe"},
+    )
+    body = resp.json()
+    assert body["mode"] == "observe"
+    assert body["has_pending"] is False
+    assert all(not e["executed"] for e in body["executions"])
+    assert all(not e["pending"] for e in body["executions"])
+    # the plan itself is still fully computed and shown
+    assert body["interdiction"]["crown_jewel_protected"] is True
+
+
+def test_api_respond_mode_leaves_gated_actions_pending(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    monkeypatch.setenv("CHAKRAVYUH_DB_PATH", str(tmp_path / "test.db"))
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    client = TestClient(app)
+    resp = client.post(
+        "/incidents/analyze",
+        json={"incident_id": "INC-RESPOND", "mode": "respond"},
+    )
+    body = resp.json()
+    assert body["mode"] == "respond"
+    assert body["has_pending"] is True
+    gated = [e for e in body["executions"] if e["gated"]]
+    ungated = [e for e in body["executions"] if not e["gated"]]
+    assert all(e["pending"] and not e["executed"] for e in gated)
+    assert all(e["executed"] and not e["pending"] for e in ungated)
+
+
+def test_api_approve_executes_pending_action(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    monkeypatch.setenv("CHAKRAVYUH_DB_PATH", str(tmp_path / "test.db"))
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    client = TestClient(app)
+    db_id = client.post(
+        "/incidents/analyze", json={"incident_id": "INC-APPROVE"}
+    ).json()["db_id"]
+
+    approved = client.post(
+        f"/incidents/{db_id}/approve",
+        json={"approved": True, "approver": "test-analyst"},
+    )
+    assert approved.status_code == 200
+    body = approved.json()
+    assert body["has_pending"] is False
+    assert all(not e["pending"] for e in body["executions"])
+    gated = [e for e in body["executions"] if e["gated"]]
+    assert all(e["executed"] and e["approved_by"] == "test-analyst" for e in gated)
+    assert "ADDENDUM" in body["certin_report"]
+    assert body["audit"]["ok"] is True
+
+    # persisted, not just returned in-response
+    refetched = client.get(f"/incidents/{db_id}").json()
+    assert refetched["has_pending"] is False
+    assert "ADDENDUM" in refetched["certin_report"]
+
+
+def test_api_deny_leaves_action_unexecuted(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    monkeypatch.setenv("CHAKRAVYUH_DB_PATH", str(tmp_path / "test.db"))
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    client = TestClient(app)
+    db_id = client.post(
+        "/incidents/analyze", json={"incident_id": "INC-DENY"}
+    ).json()["db_id"]
+
+    denied = client.post(
+        f"/incidents/{db_id}/approve",
+        json={"approved": False, "approver": "test-analyst"},
+    )
+    body = denied.json()
+    gated = [e for e in body["executions"] if e["gated"]]
+    assert all(not e["executed"] and not e["pending"] for e in gated)
+    assert "DENIED" in body["certin_report"]
+
+
+def test_api_approve_with_no_pending_actions_is_400(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    monkeypatch.setenv("CHAKRAVYUH_DB_PATH", str(tmp_path / "test.db"))
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    client = TestClient(app)
+    db_id = client.post(
+        "/incidents/analyze", json={"incident_id": "INC-TWICE"}
+    ).json()["db_id"]
+    client.post(f"/incidents/{db_id}/approve", json={"approved": True})
+
+    second = client.post(f"/incidents/{db_id}/approve", json={"approved": True})
+    assert second.status_code == 400
+
+
+def test_api_custom_events_override_bundled_scenario(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    monkeypatch.setenv("CHAKRAVYUH_DB_PATH", str(tmp_path / "test.db"))
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    client = TestClient(app)
+    custom_events = [
+        {
+            "asset_id": "it_jump_host",
+            "kind": "auth",
+            "features": {
+                "off_hours": 1, "failed_logins_1h": 1, "new_asset_pair": 1,
+                "bytes_out_zscore": 1.5, "process_count_zscore": 0.8,
+                "privilege_level": 0, "session_duration_zscore": 0.5,
+                "anomaly_score": 0.9,
+            },
+            "is_malicious": True,
+            "technique_hint": "T1078",
+        },
+    ]
+    resp = client.post(
+        "/incidents/analyze",
+        json={
+            "incident_id": "INC-CUSTOM", "mode": "observe", "events": custom_events,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    flagged = {a["asset_id"] for a in body["anomalies"]}
+    assert flagged == {"it_jump_host"}  # only the one custom event, nothing else
+
+
+def test_api_telemetry_event_schema_endpoint():
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    client = TestClient(app)
+    resp = client.get("/schema/telemetry-event")
+    assert resp.status_code == 200
+    schema = resp.json()
+    assert "asset_id" in schema["properties"]
+    assert "features" in schema["properties"]

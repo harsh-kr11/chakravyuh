@@ -114,15 +114,36 @@ class CopilotAgent:
         )
         return self._respond(prompt, docs)
 
-    def ask(self, result: dict[str, Any], question: str) -> CopilotBriefing:
-        """Answer a free-text analyst question grounded in this incident + retrieval."""
+    def ask(
+        self,
+        result: dict[str, Any],
+        question: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> CopilotBriefing:
+        """Answer a free-text analyst question grounded in this incident + retrieval.
+
+        ``history`` (optional) is the prior turns of *this same conversation*,
+        each ``{"question": ..., "answer": ...}`` — passed back by the caller
+        (the dashboard keeps it client-side; nothing is persisted server-side).
+        Retrieval still runs fresh per question so grounding doesn't drift as
+        the conversation gets longer.
+        """
         retriever = get_retriever()
         docs = retriever.retrieve(question, k=5) if retriever else []
+
+        transcript = ""
+        if history:
+            turns = "\n".join(
+                f"Analyst: {h['question']}\nYou: {h['answer']}" for h in history
+            )
+            transcript = f"Earlier in this conversation:\n{turns}\n\n"
 
         prompt = (
             f"{_incident_summary(result)}\n\n"
             f"Retrieved context:\n{_format_context(docs)}\n\n"
+            f"{transcript}"
             f"Analyst question: {question}\n\n"
-            "Answer using only the incident summary and retrieved context above."
+            "Answer using only the incident summary and retrieved context "
+            "above (and the earlier conversation, if any, for continuity)."
         )
         return self._respond(prompt, docs)

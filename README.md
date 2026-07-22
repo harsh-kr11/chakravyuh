@@ -77,6 +77,20 @@ chakravyuh serve              # picks up .env automatically
 
 With Neo4j running, attribution and the RAG-grounded copilot (`/incidents/{id}/briefing`, `/incidents/{id}/ask`) use the real graph; without it, everything still works via a small offline fallback. See [`docs/PREREQUISITES.md`](docs/PREREQUISITES.md) for the full breakdown and [`.env.example`](.env.example) for every setting.
 
+### Tier 3 — real telemetry, real human-in-the-loop, real actions
+
+```bash
+curl -s -X POST localhost:8080/incidents/analyze \
+  -H 'content-type: application/json' \
+  -d '{"incident_id":"INC-1","mode":"observe","events":[{"asset_id":"it_jump_host","kind":"auth","features":{"off_hours":1,"failed_logins_1h":4}}]}'
+```
+
+`POST /incidents/analyze` accepts two independent choices:
+- **`events`** (optional) — bring your own translated telemetry instead of the bundled demo events. See [`docs/INTEGRATION.md`](docs/INTEGRATION.md) for the event schema and a worked, language-agnostic translator example.
+- **`mode`** — `"observe"` computes and shows the plan but executes nothing at all (safest first look); `"respond"` (default) executes low-risk actions immediately and leaves anything human-gated **genuinely pending** — no auto-approval — until a real `POST /incidents/{id}/approve` call resolves it. There is no "fully autonomous, skip the human" mode; that's deliberate, not a missing feature.
+
+Approving a pending action carries it out via a pluggable **connector** (`chakravyuh.connectors`) — a webhook or Slack notification out of the box, `none` (simulated) by default. Ship your own by implementing `Connector` — see `docs/INTEGRATION.md`.
+
 ### Everything in containers
 
 ```bash
@@ -99,7 +113,8 @@ docker compose up --build     # neo4j :7474/:7687 + api :8080 + dashboard :8081
 | Analyst Copilot agent (read-only, RAG-grounded) | `chakravyuh.agents.copilot` | ✅ Anthropic / OpenAI / Gemini |
 | Cascade agent (cross-sector impact) | `chakravyuh.agents.cascade` | ✅ |
 | Interdiction agent | `chakravyuh.agents.interdiction_agent` | ✅ |
-| Response / SOAR agent (human-gated) | `chakravyuh.agents.response` | ✅ |
+| Response / SOAR agent — real pending-approval HITL | `chakravyuh.agents.response` | ✅ genuinely gated, not auto-approved |
+| Action connectors (webhook / Slack / your own) | `chakravyuh.connectors` | ✅ |
 | Compliance agent (CERT-In report) | `chakravyuh.agents.compliance` | ✅ |
 | Audit agent (hash-chained) | `chakravyuh.agents.audit` | ✅ |
 | Orchestrator (pipeline + fail-safe) | `chakravyuh.orchestrator` | ✅ |

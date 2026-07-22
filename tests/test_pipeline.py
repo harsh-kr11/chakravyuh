@@ -1,7 +1,13 @@
 """Tests for audit integrity, response gating, cascade, and the full pipeline."""
 from __future__ import annotations
 
-from chakravyuh.agents import AuditAgent, ResponseAgent, auto_approve, deny_all
+from chakravyuh.agents import (
+    AuditAgent,
+    ResponseAgent,
+    auto_approve,
+    deny_all,
+    pending_approval,
+)
 from chakravyuh.orchestrator import Orchestrator
 from chakravyuh.scenarios import redecho
 from chakravyuh.schemas import ActionType, ContainmentAction
@@ -103,3 +109,39 @@ def test_end_to_end_audit_records_every_execution():
     # every executed action has both an intent and a result record (fail-safe)
     assert len(intents) == len(result.plan.actions)
     assert len(results_) == len(result.plan.actions)
+
+
+# --------------------------------------------------------------------------- #
+# Observe-only mode and real (pending) human-in-the-loop
+# --------------------------------------------------------------------------- #
+def test_observe_only_mode_executes_nothing():
+    ag = redecho.build_graph()
+    events = redecho.telemetry_stream()
+    orch = Orchestrator()  # default gate would auto-approve -- must not matter
+    result = orch.run(
+        ag, events, crown_jewel=redecho.CROWN_JEWEL, observe_only=True
+    )
+    assert result.plan.actions  # a plan is still computed and shown
+    assert all(not e.executed for e in result.executions)
+    assert all(not e.pending for e in result.executions)
+    assert result.audit_ok is True
+    observed = [r for r in orch.audit.records if r.event_type == "action_observed_only"]
+    assert len(observed) == len(result.plan.actions)
+
+
+def test_pending_gate_leaves_gated_actions_unresolved():
+    ag = redecho.build_graph()
+    events = redecho.telemetry_stream()
+    orch = Orchestrator(gate=pending_approval)
+    result = orch.run(ag, events, crown_jewel=redecho.CROWN_JEWEL)
+
+    gated = [e for e in result.executions if e.gated]
+    ungated = [e for e in result.executions if not e.gated]
+    assert gated, "expected at least one human-gated action in the bundled scenario"
+    assert all(e.pending and not e.executed for e in gated)
+    # ungated (low-risk) actions still run immediately even under real HITL
+    assert all(e.executed and not e.pending for e in ungated)
+    pending_records = [
+        r for r in orch.audit.records if r.event_type == "action_pending"
+    ]
+    assert len(pending_records) == len(gated)

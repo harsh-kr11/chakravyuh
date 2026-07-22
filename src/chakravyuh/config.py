@@ -68,6 +68,11 @@ class Settings:
     neo4j_user: str = "neo4j"
     neo4j_password: str = ""
 
+    # --- action connector (optional; default is a safe in-memory simulation) #
+    connector: str = "none"    # none | webhook | slack
+    webhook_url: str = ""
+    slack_webhook_url: str = ""
+
     @property
     def llm_enabled(self) -> bool:
         return self.llm_provider.lower() != "none"
@@ -93,4 +98,7 @@ def load_settings() -> Settings:
         neo4j_uri=_get("CHAKRAVYUH_NEO4J_URI", ""),
         neo4j_user=_get("CHAKRAVYUH_NEO4J_USER", "neo4j"),
         neo4j_password=_get("CHAKRAVYUH_NEO4J_PASSWORD", ""),
+        connector=_get("CHAKRAVYUH_CONNECTOR", "none"),
+        webhook_url=_get("CHAKRAVYUH_WEBHOOK_URL", ""),
+        slack_webhook_url=_get("CHAKRAVYUH_SLACK_WEBHOOK_URL", ""),
     )

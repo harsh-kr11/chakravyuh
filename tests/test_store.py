@@ -48,3 +48,20 @@ def test_store_list_orders_newest_first(tmp_path):
 
     listing = store.list()
     assert [row["id"] for row in listing] == [second, first]
+
+
+def test_store_update_overwrites_result_blob(tmp_path):
+    store = IncidentStore(str(tmp_path / "incidents.db"))
+    data = _sample_result("INC-1")
+    row_id = store.save("INC-1", "redecho", data)
+
+    data["certin_report"] += "\nADDENDUM: approved by analyst"
+    assert store.update(row_id, data) is True
+
+    fetched = store.get(row_id)
+    assert "ADDENDUM" in fetched["certin_report"]
+
+
+def test_store_update_returns_false_for_missing_row(tmp_path):
+    store = IncidentStore(str(tmp_path / "incidents.db"))
+    assert store.update(999, {"incident_id": "x", "interdiction": {}}) is False

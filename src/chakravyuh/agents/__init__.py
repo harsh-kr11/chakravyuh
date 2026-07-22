@@ -6,11 +6,11 @@ from .cascade import CascadeAgent
 from .compliance import ComplianceAgent
 from .detection import DetectionAgent
 from .interdiction_agent import InterdictionAgent
-from .response import ResponseAgent, auto_approve, deny_all
+from .response import ResponseAgent, auto_approve, deny_all, pending_approval
 
 __all__ = [
     "Agent", "AgentConfig",
     "DetectionAgent", "AttributionAgent", "CascadeAgent",
     "InterdictionAgent", "ResponseAgent", "ComplianceAgent", "AuditAgent",
-    "auto_approve", "deny_all",
+    "auto_approve", "deny_all", "pending_approval",
 ]

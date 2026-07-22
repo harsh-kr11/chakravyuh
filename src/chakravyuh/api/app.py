@@ -4,44 +4,57 @@ Endpoints
 ---------
 GET  /healthz                 liveness probe
 GET  /scenario                the bundled demo scenario (graph + events) as JSON
-POST /incidents/analyze       run the pipeline on a scenario or supplied payload,
+GET  /schema/telemetry-event  JSON schema for the event shape a translator must produce
+POST /incidents/analyze       run the pipeline (observe-only, or propose+respond),
                                persisting the result
+POST /incidents/{id}/approve  resolve a pending human-gated action (approve or deny)
 GET  /incidents               list previously analyzed incidents (summary)
 GET  /incidents/{id}          fetch one persisted incident's full result
 GET  /incidents/{id}/briefing read-only, RAG-grounded LLM narrative for the incident
 POST /incidents/{id}/ask      ask the analyst copilot a free-text question about it
 GET  /                        minimal service description
 
+Two request modes, chosen via ``AnalyzeRequest.mode``:
+  - "observe": compute and show the plan, execute nothing at all (not even
+    low-risk autonomous actions). For a first, safe look at what the system
+    would do.
+  - "respond" (default): low-risk actions execute immediately; anything
+    requiring a human gate is left genuinely *pending* — no auto-approval —
+    until a real ``POST /incidents/{id}/approve`` call resolves it. This is
+    the real human-in-the-loop path; see ``chakravyuh.agents.response``.
+
 The copilot endpoints are entirely read-only: they explain an
-already-computed, already-executed containment plan using retrieved
-ATT&CK/CVE/CERT-In context. They never select or influence containment
-actions (see ``chakravyuh.agents.copilot``), and are optional — with no LLM
-provider configured they still return the retrieved context, just without
+already-computed incident using retrieved ATT&CK/CVE/CERT-In context. They
+never select or influence containment actions (see
+``chakravyuh.agents.copilot``), and are optional — with no LLM provider
+configured they still return the retrieved context, just without
 LLM-generated prose.
 
-Each analyze run is persisted to a SQLite-backed store (see ``chakravyuh.store``)
-so incidents survive process restarts and can be listed/replayed. The service
-is intended to sit behind the command-centre dashboard and behind an
-authenticating gateway in production (auth is deliberately out of scope for
-this reference).
+Each analyze run is persisted to a SQLite-backed store (see
+``chakravyuh.store``) so incidents survive process restarts and can be
+listed/replayed/resolved later. The service is intended to sit behind the
+command-centre dashboard and behind an authenticating gateway in production
+(auth is deliberately out of scope for this reference).
 """
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .. import __version__
-from ..adapters import ScenarioAdapter
-from ..agents import AgentConfig
+from ..adapters import ReplayAdapter, ScenarioAdapter
+from ..agents import AgentConfig, pending_approval
 from ..agents.copilot import CopilotAgent
 from ..config import load_settings
+from ..connectors import make_connector
 from ..export import result_to_dict
 from ..orchestrator import Orchestrator
 from ..scenarios import redecho
+from ..schemas import AuditRecord, ContainmentAction, TelemetryEvent
 from ..store import IncidentStore
 
 app = FastAPI(title="CHAKRAVYUH", version=__version__)
@@ -68,8 +81,13 @@ def get_store() -> IncidentStore:
 
 class AnalyzeRequest(BaseModel):
     incident_id: str = "INC-0001"
-    scenario: str = "redecho"        # only bundled scenario for now
+    scenario: str = "redecho"        # bundled topology; only this one for now
     anomaly_threshold: float | None = None
+    mode: Literal["observe", "respond"] = "respond"
+    # Bring-your-own telemetry: a real translator's output. Omit to use the
+    # bundled demo events. The attack-graph *topology* is still the bundled
+    # one either way — see docs/INTEGRATION.md for that boundary.
+    events: list[TelemetryEvent] | None = None
 
 
 def _orchestrator(req: AnalyzeRequest) -> Orchestrator:
@@ -82,7 +100,10 @@ def _orchestrator(req: AnalyzeRequest) -> Orchestrator:
         ),
         blast_radius_threshold=settings.blast_radius_threshold,
     )
-    return Orchestrator(cfg)
+    if req.mode == "observe":
+        # Gate/connector are irrelevant: observe_only skips execution outright.
+        return Orchestrator(cfg)
+    return Orchestrator(cfg, gate=pending_approval, connector=make_connector(settings))
 
 
 @app.get("/")
@@ -92,7 +113,8 @@ def root() -> dict[str, Any]:
         "version": __version__,
         "description": "Incident-time cross-sector attack-path interdiction",
         "endpoints": [
-            "/healthz", "/scenario", "/incidents/analyze",
+            "/healthz", "/scenario", "/schema/telemetry-event",
+            "/incidents/analyze", "/incidents/{id}/approve",
             "/incidents", "/incidents/{id}",
             "/incidents/{id}/briefing", "/incidents/{id}/ask",
         ],
@@ -130,15 +152,132 @@ def scenario() -> dict[str, Any]:
             "crown_jewel": redecho.CROWN_JEWEL}
 
 
+@app.get("/schema/telemetry-event")
+def telemetry_event_schema() -> dict[str, Any]:
+    """The exact JSON shape a translator must produce per event. Feed a list
+    of these as ``events`` to ``POST /incidents/analyze`` — see
+    docs/INTEGRATION.md for a worked, language-agnostic example.
+    """
+    return TelemetryEvent.model_json_schema()
+
+
 @app.post("/incidents/analyze")
 def analyze(
     req: AnalyzeRequest, store: IncidentStore = Depends(get_store)
 ) -> dict[str, Any]:
     orch = _orchestrator(req)
-    adapter = ScenarioAdapter(redecho)
-    result = orch.run_adapter(adapter, incident_id=req.incident_id)
+    if req.events is not None:
+        adapter = ReplayAdapter(redecho.build_graph(), req.events, redecho.CROWN_JEWEL)
+    else:
+        adapter = ScenarioAdapter(redecho)
+    result = orch.run_adapter(
+        adapter, incident_id=req.incident_id, observe_only=req.mode == "observe",
+    )
     data = result_to_dict(result, orch)
+    data["mode"] = req.mode
+    data["has_pending"] = any(e["pending"] for e in data["executions"])
     data["db_id"] = store.save(req.incident_id, req.scenario, data)
+    return data
+
+
+def _get_incident_or_404(row_id: int, store: IncidentStore) -> dict[str, Any]:
+    data = store.get(row_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"incident {row_id} not found")
+    return data
+
+
+def _append_audit_record(
+    records: list[dict[str, Any]], actor: str, event_type: str, payload: dict[str, Any]
+) -> None:
+    prev_hash = records[-1]["hash"] if records else ""
+    rec = AuditRecord(
+        seq=len(records), actor=actor, event_type=event_type,
+        payload=payload, prev_hash=prev_hash,
+    )
+    rec.hash = rec.compute_hash()
+    records.append(rec.model_dump(mode="json"))
+
+
+def _verify_audit_chain(records: list[dict[str, Any]]) -> bool:
+    prev_hash = ""
+    for r in records:
+        if r["prev_hash"] != prev_hash:
+            return False
+        rec = AuditRecord.model_validate(r)
+        if rec.hash != rec.compute_hash():
+            return False
+        prev_hash = rec.hash
+    return True
+
+
+class ApproveRequest(BaseModel):
+    approved: bool
+    approver: str = "analyst"
+    # Which pending action to resolve; omit to resolve ALL pending actions
+    # the same way (matches a single dashboard "Approve & contain" click).
+    action_index: int | None = None
+
+
+@app.post("/incidents/{row_id}/approve")
+def approve(
+    row_id: int, req: ApproveRequest, store: IncidentStore = Depends(get_store)
+) -> dict[str, Any]:
+    data = _get_incident_or_404(row_id, store)
+    executions = data["executions"]
+    pending_idxs = [i for i, e in enumerate(executions) if e.get("pending")]
+    if req.action_index is not None:
+        pending_idxs = [i for i in pending_idxs if i == req.action_index]
+    if not pending_idxs:
+        raise HTTPException(
+            status_code=400, detail="no matching pending action(s) to resolve"
+        )
+
+    connector = make_connector(load_settings())
+    records = data["audit"]["records"]
+    addendum_lines: list[str] = []
+
+    for i in pending_idxs:
+        entry = executions[i]
+        action = ContainmentAction.model_validate(entry["action"])
+        _append_audit_record(records, "response", "human_decision", {
+            "action": action.action_type.value, "target": str(action.target),
+            "approved": req.approved, "approver": req.approver,
+        })
+        if req.approved:
+            if connector is not None:
+                outcome = connector.execute(action, incident_id=data["incident_id"])
+                ok, detail = outcome.ok, outcome.detail
+            else:
+                ok, detail = True, "simulated"
+            entry.update(
+                executed=ok, pending=False, approved_by=req.approver,
+                error=None if ok else detail,
+            )
+            addendum_lines.append(
+                f"  - {action.action_type.value} -> {action.target}: "
+                f"APPROVED by {req.approver} (executed={ok})"
+            )
+        else:
+            entry.update(executed=False, pending=False, approved_by=None)
+            addendum_lines.append(
+                f"  - {action.action_type.value} -> {action.target}: "
+                f"DENIED by {req.approver}"
+            )
+        _append_audit_record(records, "response", "action_result", {
+            "action": action.action_type.value, "executed": entry["executed"],
+            "approved_by": entry["approved_by"],
+        })
+
+    data["certin_report"] += (
+        "\n\nADDENDUM - human decisions recorded after initial draft:\n"
+        + "\n".join(addendum_lines) + "\n"
+    )
+    data["audit"]["ok"] = _verify_audit_chain(records)
+    data["metrics"]["mttr_steps"] = len([e for e in executions if e["executed"]])
+    data["has_pending"] = any(e.get("pending") for e in executions)
+
+    store.update(row_id, data)
     return data
 
 
@@ -153,17 +292,7 @@ def list_incidents(
 def get_incident(
     row_id: int, store: IncidentStore = Depends(get_store)
 ) -> dict[str, Any]:
-    data = store.get(row_id)
-    if data is None:
-        raise HTTPException(status_code=404, detail=f"incident {row_id} not found")
-    return data
-
-
-def _get_incident_or_404(row_id: int, store: IncidentStore) -> dict[str, Any]:
-    data = store.get(row_id)
-    if data is None:
-        raise HTTPException(status_code=404, detail=f"incident {row_id} not found")
-    return data
+    return _get_incident_or_404(row_id, store)
 
 
 @app.get("/incidents/{row_id}/briefing")
@@ -181,6 +310,7 @@ def briefing(
 
 class AskRequest(BaseModel):
     question: str
+    history: list[dict[str, str]] | None = None
 
 
 @app.post("/incidents/{row_id}/ask")
@@ -188,7 +318,7 @@ def ask(
     row_id: int, req: AskRequest, store: IncidentStore = Depends(get_store)
 ) -> dict[str, Any]:
     data = _get_incident_or_404(row_id, store)
-    result = CopilotAgent().ask(data, req.question)
+    result = CopilotAgent().ask(data, req.question, history=req.history)
     return {
         "text": result.text,
         "citations": result.citations,

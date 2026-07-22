@@ -154,6 +154,7 @@ class ExecutionResult(BaseModel):
     action: ContainmentAction
     executed: bool
     gated: bool = False            # True if it was routed to a human gate
+    pending: bool = False          # True if awaiting a real human decision
     approved_by: str | None = None
     error: str | None = None
     ts: datetime = Field(default_factory=_utcnow)
