@@ -21,3 +21,6 @@ data/models/
 .DS_Store
 .idea/
 .vscode/
+# Local planning notes — not part of the product
+plan-grok.md
+final-plan.md

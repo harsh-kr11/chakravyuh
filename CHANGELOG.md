@@ -15,7 +15,7 @@ Neo4j or an LLM key.
   `GET /scenario?id=`, `demo --scenario`, `demo --hitl`.
 - Greedy isolate-frontier baseline (shown only when strictly worse than min-cut).
 - `GET /readyz` (detector, LLM, Neo4j, store).
-- `docs/CASES.md`, `docs/JUDGE_QA.md`, `docs/WALKTHROUGH.md`, `docs/REVIEW.md`.
+- `docs/CASES.md` — sources and disclaimers for the case library.
 
 ### Fixed
 - Empty frontier / attacker-on-jewel no longer crash or report protected.

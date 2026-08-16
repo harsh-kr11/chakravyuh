@@ -65,7 +65,7 @@ Five cases run **in the engine** (picker on the dashboard, `--scenario` on the C
 | `ukraine2015` | reconstruction | MITRE C0028. Cut upstream of the HMI, not the breaker circuit. |
 | `aiims` | reconstruction | Isolate the alerting eHospital island. The five hosts were **already encrypted** — this engine does not decrypt. |
 
-Sources, disclaimers, and “never say” lines: [`docs/CASES.md`](docs/CASES.md). Ten-minute stand-up: [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md). Judge Q&A: [`docs/JUDGE_QA.md`](docs/JUDGE_QA.md).
+Sources and disclaimers for each case: [`docs/CASES.md`](docs/CASES.md).
 
 ### Tier 1 — the REST API + live dashboard
 
