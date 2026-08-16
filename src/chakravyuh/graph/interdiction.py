@@ -24,13 +24,10 @@ disruptive) set of edges whose blocking disconnects the attacker from the
 crown jewel while preserving every protected dependency. Each cut edge maps to
 one concrete containment action.
 
-Why this is the wedge
-----------------------
-Classic attack-graph interdiction is offline/pre-incident hardening. Online
-intrusion-response work selects policies (POMDP/RL) on a single IT network.
-Cross-sector cascade games model *physical* node attacks. Here we do all three
-at once: a live-telemetry-driven cut, with an explicit availability cost, that
-is cross-sector-cascade-aware.
+If the frontier is empty, there is nothing to contain — we do **not** report
+the crown jewel as protected. If the only remaining paths are protected
+(infinite-capacity) edges, or the attacker is already on the jewel, there is
+no finite safe cut and we return a failed plan rather than crashing.
 """
 from __future__ import annotations
 
@@ -63,12 +60,16 @@ def min_cost_interdiction(
 ) -> tuple[list[tuple[str, str]], float]:
     """Return (cut_edges, total_cut_cost) separating attacker from crown jewel.
 
-    Raises ValueError if the crown jewel is unreachable from the attacker
-    (nothing to do) or if no finite cut exists (attacker already co-located
-    with the crown jewel, or only protected edges remain).
+    Returns ``([], 0.0)`` if the crown jewel is already unreachable.
+    Raises ValueError if the jewel is unknown, or if no finite cut exists
+    (attacker co-located with the jewel, or only protected edges remain).
     """
     if crown_jewel not in ag.g:
         raise ValueError(f"unknown crown jewel {crown_jewel!r}")
+    if crown_jewel in attacker_frontier:
+        raise ValueError(
+            "attacker already on the crown jewel; no finite containment cut"
+        )
 
     h = _flow_network(ag, attacker_frontier)
     if _SUPER_SOURCE not in h or crown_jewel not in h:
@@ -76,9 +77,15 @@ def min_cost_interdiction(
     if not nx.has_path(h, _SUPER_SOURCE, crown_jewel):
         return [], 0.0  # already separated — nothing to cut
 
-    cut_value, (reachable, unreachable) = nx.minimum_cut(
-        h, _SUPER_SOURCE, crown_jewel
-    )
+    try:
+        cut_value, (reachable, unreachable) = nx.minimum_cut(
+            h, _SUPER_SOURCE, crown_jewel
+        )
+    except nx.NetworkXUnbounded as exc:
+        raise ValueError(
+            "no finite containment cut exists (infinite-capacity path to "
+            "the crown jewel, or only protected dependencies remain)"
+        ) from exc
     if cut_value == _INF:
         raise ValueError(
             "no finite containment cut exists (attacker adjacent to crown "
@@ -108,7 +115,6 @@ def naive_containment_cost(
     edges: list[tuple[str, str]] = []
     cost = 0.0
     severs_protected = False
-    # Cut every edge incident to the crown jewel (in and out).
     for u in ag.g.predecessors(crown_jewel):
         data = ag.g.edges[u, crown_jewel]
         edges.append((u, crown_jewel))
@@ -122,6 +128,50 @@ def naive_containment_cost(
     return edges, cost, severs_protected
 
 
+def greedy_isolate_frontier_cost(
+    ag: AttackGraph, attacker_frontier: list[str]
+) -> tuple[list[tuple[str, str]], float, bool]:
+    """Baseline: cut every outgoing edge from every alerting (frontier) host.
+
+    The 'isolate everything that beeped' playbook. Returns
+    (edges_cut, cost, severs_protected_dependency).
+    """
+    edges: list[tuple[str, str]] = []
+    cost = 0.0
+    severs_protected = False
+    seen: set[tuple[str, str]] = set()
+    for s in attacker_frontier:
+        if s not in ag.g:
+            continue
+        for v in ag.g.successors(s):
+            pair = (s, v)
+            if pair in seen:
+                continue
+            seen.add(pair)
+            data = ag.g.edges[s, v]
+            edges.append(pair)
+            cost += float(data.get("cut_cost", 1.0))
+            if data.get("protected"):
+                severs_protected = True
+    return edges, cost, severs_protected
+
+
+def _empty_plan(incident_id: str, notes: str, naive_cost: float = 0.0,
+                greedy_cost: float = 0.0) -> InterdictionPlan:
+    return InterdictionPlan(
+        incident_id=incident_id,
+        actions=[],
+        attacker_cost_before=_INF,
+        attacker_cost_after=_INF,
+        availability_cost=0.0,
+        crown_jewel_protected=False,
+        cascade_averted=False,
+        baseline_availability_cost=naive_cost,
+        greedy_availability_cost=greedy_cost,
+        notes=notes,
+    )
+
+
 def plan_interdiction(
     ag: AttackGraph,
     incident_id: str,
@@ -129,16 +179,36 @@ def plan_interdiction(
     crown_jewel: str,
 ) -> InterdictionPlan:
     """High-level entry point: produce a full, comparable InterdictionPlan."""
+    _, naive_cost, naive_severs = naive_containment_cost(ag, crown_jewel)
+    _, greedy_cost, _ = greedy_isolate_frontier_cost(ag, attacker_frontier)
+
+    if not attacker_frontier:
+        return _empty_plan(
+            incident_id,
+            "no attacker path assessed (empty frontier)",
+            naive_cost=naive_cost,
+            greedy_cost=greedy_cost,
+        )
+
     cost_before = ag.attacker_min_cost(attacker_frontier, crown_jewel)
 
-    cut_edges, cut_cost = min_cost_interdiction(
-        ag, attacker_frontier, crown_jewel
-    )
+    try:
+        cut_edges, cut_cost = min_cost_interdiction(
+            ag, attacker_frontier, crown_jewel
+        )
+    except ValueError as exc:
+        return _empty_plan(
+            incident_id,
+            f"Crown jewel already compromised or no finite cut — "
+            f"escalation required. ({exc})",
+            naive_cost=naive_cost,
+            greedy_cost=greedy_cost,
+        )
+
     actions: list[ContainmentAction] = [
         ag.edge_to_action(u, v) for (u, v) in cut_edges
     ]
 
-    # Recompute attacker reachability after applying the cut.
     residual = ag.g.copy()
     residual.remove_edges_from(cut_edges)
     cost_after = _INF
@@ -152,12 +222,10 @@ def plan_interdiction(
             except nx.NetworkXNoPath:
                 continue
 
-    # Did we preserve every protected dependency? (min-cut guarantees yes, but
-    # we assert it explicitly for auditability.)
     severed_protected = any(
         ag.g.edges[u, v].get("protected") for (u, v) in cut_edges
     )
-    _, naive_cost, naive_severs = naive_containment_cost(ag, crown_jewel)
+    protected = cost_after == _INF
 
     return InterdictionPlan(
         incident_id=incident_id,
@@ -165,9 +233,10 @@ def plan_interdiction(
         attacker_cost_before=cost_before,
         attacker_cost_after=cost_after,
         availability_cost=cut_cost,
-        crown_jewel_protected=(cost_after == _INF),
+        crown_jewel_protected=protected,
         cascade_averted=(not severed_protected) and naive_severs,
         baseline_availability_cost=naive_cost,
+        greedy_availability_cost=greedy_cost,
         notes=(
             f"min-cost cut of {len(cut_edges)} edge(s); "
             f"naive baseline would cost {naive_cost:.1f} "

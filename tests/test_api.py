@@ -367,6 +367,78 @@ def test_api_custom_events_override_bundled_scenario(tmp_path, monkeypatch):
     assert flagged == {"it_jump_host"}  # only the one custom event, nothing else
 
 
+def test_api_scenarios_catalog():
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    client = TestClient(app)
+    listed = client.get("/scenarios").json()
+    ids = {row["id"] for row in listed}
+    assert "colonial" in ids and "synnovis" in ids
+    sc = client.get("/scenario?id=colonial").json()
+    assert sc["crown_jewel"] == "pipeline_scada"
+    assert sc["kind"] == "reconstruction"
+    assert client.get("/scenario?id=nope").status_code == 404
+
+
+def test_api_analyze_colonial(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    monkeypatch.setenv("CHAKRAVYUH_DB_PATH", str(tmp_path / "test.db"))
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    client = TestClient(app)
+    body = client.post(
+        "/incidents/analyze",
+        json={"incident_id": "INC-COL", "scenario": "colonial", "mode": "observe"},
+    ).json()
+    assert body["interdiction"]["crown_jewel_protected"] is True
+    interdiction = body["interdiction"]
+    assert interdiction["availability_cost"] < (
+        interdiction["baseline_availability_cost"]
+    )
+    assert body["historical"]["severs_protected"] is True
+    assert "PENDING" in body["certin_report"] or "PROPOSED" in body["certin_report"]
+    assert body["interdiction"]["crown_jewel_protected_now"] is False
+
+
+def test_api_deny_history_not_green(tmp_path, monkeypatch):
+    pytest.importorskip("fastapi")
+    monkeypatch.setenv("CHAKRAVYUH_DB_PATH", str(tmp_path / "test.db"))
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    client = TestClient(app)
+    db_id = client.post(
+        "/incidents/analyze", json={"incident_id": "INC-HIST"}
+    ).json()["db_id"]
+    client.post(
+        f"/incidents/{db_id}/approve",
+        json={"approved": False, "approver": "x"},
+    )
+    listed = client.get("/incidents").json()
+    row = next(r for r in listed if r["id"] == db_id)
+    assert row["crown_jewel_protected"] is False
+    assert row["has_pending"] is False
+
+
+def test_api_readyz():
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from chakravyuh.api.app import app
+
+    body = TestClient(app).get("/readyz").json()
+    assert body["status"] == "ok"
+    assert body["detect"] in {"sklearn", "heuristic"}
+    assert "llm_enabled" in body
+    assert body["store"] is True
+
+
 def test_api_telemetry_event_schema_endpoint():
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient

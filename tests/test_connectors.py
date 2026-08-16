@@ -94,6 +94,33 @@ def test_slack_connector_formats_message():
     assert "INC-1" in kwargs["json"]["text"]
 
 
+def test_slack_connector_formats_list_target():
+    fake_response = MagicMock(status_code=200, text="")
+    action = ContainmentAction(
+        action_type=ActionType.BLOCK_LINK,
+        target=["ics_vpn", "scada_hmi"],
+        rationale="test",
+    )
+    with patch("httpx.post", return_value=fake_response) as mock_post:
+        SlackConnector("https://hooks.slack.com/services/xyz").execute(
+            action, incident_id="INC-1"
+        )
+    text = mock_post.call_args.kwargs["json"]["text"]
+    assert "ics_vpn -> scada_hmi" in text
+
+
+def test_isolated_set_only_grows_on_success():
+    from chakravyuh.connectors.base import Connector, ConnectorResult
+
+    class Boom(Connector):
+        def execute(self, action, *, incident_id=""):
+            return ConnectorResult(ok=False, detail="nope")
+
+    agent = ResponseAgent(gate=auto_approve, connector=Boom())
+    agent.process([_action(gated=False)])
+    assert "engineer_cred" not in agent.isolated
+
+
 def test_response_agent_uses_connector_when_configured():
     fake_response = MagicMock(status_code=200, text="")
     with patch("httpx.post", return_value=fake_response) as mock_post:

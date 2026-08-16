@@ -11,6 +11,7 @@ so the reference implementation has zero heavy dependencies.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 from .agents import (
@@ -35,6 +36,8 @@ from .schemas import (
     TelemetryEvent,
 )
 
+_LOG = logging.getLogger(__name__)
+
 
 @dataclass
 class PipelineResult:
@@ -44,7 +47,7 @@ class PipelineResult:
     executions: list[ExecutionResult] = field(default_factory=list)
     certin_report: str = ""
     audit_ok: bool = False
-    mttd_steps: int = 0   # events seen before first detection
+    mttd_steps: int | None = None  # events before first detection; None = none
     mttr_steps: int = 0   # actions taken to contain
 
 
@@ -91,7 +94,7 @@ class Orchestrator:
                         "loads_at_risk": cascade.dependent_loads_at_risk,
                         "cross_sector": cascade.cross_sector})
 
-        # 4. interdiction planning
+        # 4. interdiction planning (never raises — failed plans are structured)
         plan = self.interdiction.process(
             ag, incident_id, ctx.attacker_frontier, crown_jewel
         )
@@ -99,6 +102,7 @@ class Orchestrator:
             "actions": [a.action_type.value for a in plan.actions],
             "availability_cost": plan.availability_cost,
             "baseline_cost": plan.baseline_availability_cost,
+            "greedy_cost": plan.greedy_availability_cost,
             "crown_jewel_protected": plan.crown_jewel_protected,
             "cascade_averted": plan.cascade_averted,
         })
@@ -106,15 +110,14 @@ class Orchestrator:
         # 5. response with audit-before-execute fail-safe
         executions: list[ExecutionResult] = []
         for action in plan.actions:
-            # Fail-safe: log intent BEFORE executing. If audit fails, abort.
             try:
                 self.audit.log("response", "action_intent",
                                {"action": action.action_type.value,
                                 "target": str(action.target),
                                 "gated": action.requires_human_gate,
                                 "observe_only": observe_only})
-            except Exception:  # pragma: no cover - defensive
-                # Do not execute an unlogged action.
+            except Exception as exc:
+                _LOG.warning("audit write failed, aborting action: %s", exc)
                 continue
 
             if observe_only:
@@ -137,12 +140,14 @@ class Orchestrator:
             executions.append(result)
 
         # 6. compliance report
-        report = self.compliance.draft_certin_report(ctx, cascade, plan)
+        report = self.compliance.draft_certin_report(
+            ctx, cascade, plan, executions=executions,
+            observe_only=observe_only,
+        )
         self.audit.log("compliance", "certin_report_drafted",
                        {"incident_id": incident_id})
 
-        # crude MTTD/MTTR proxies for the demo
-        mttd = 0
+        mttd: int | None = None
         for i, e in enumerate(events, start=1):
             if self.detection.score_event(e) >= self.config.anomaly_threshold:
                 mttd = i

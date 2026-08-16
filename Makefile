@@ -1,4 +1,4 @@
-.PHONY: install dev demo test lint fmt cov clean
+.PHONY: install dev demo test lint fmt cov clean preflight
 
 install:
 	pip install -e .
@@ -20,6 +20,13 @@ lint:
 
 fmt:
 	ruff check --fix src tests
+
+preflight:
+	python -m chakravyuh.demo --scenario colonial
+	python -m chakravyuh.demo --scenario synnovis
+	python -m chakravyuh.demo --hitl
+	pytest
+	ruff check src tests
 
 clean:
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache .coverage htmlcov

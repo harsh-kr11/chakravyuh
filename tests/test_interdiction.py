@@ -81,6 +81,68 @@ def test_already_separated_returns_empty_cut():
     assert cost == 0.0
 
 
+def test_empty_frontier_is_not_protected():
+    from chakravyuh.graph.interdiction import plan_interdiction
+
+    ag = _simple_graph()
+    plan = plan_interdiction(ag, "INC", [], "cj")
+    assert plan.crown_jewel_protected is False
+    assert plan.actions == []
+    assert "empty frontier" in plan.notes
+
+
+def test_attacker_on_jewel_returns_failed_plan_not_crash():
+    from chakravyuh.graph.interdiction import plan_interdiction
+
+    ag = _simple_graph()
+    plan = plan_interdiction(ag, "INC", ["cj"], "cj")
+    assert plan.crown_jewel_protected is False
+    assert plan.actions == []
+    assert "escalation" in plan.notes.lower() or "finite" in plan.notes.lower()
+
+
+def test_protected_on_path_is_not_chosen_when_finite_alternative_exists():
+    """Protected A→T (∞) cannot be the cut; SAT+SBT min-cut is 13, not A→T."""
+    ag = AttackGraph()
+    for aid, ctype, cj in [
+        ("s", AssetType.IT_HOST, False),
+        ("a", AssetType.IT_HOST, False),
+        ("b", AssetType.IT_HOST, False),
+        ("t", AssetType.OT_SCADA, True),
+    ]:
+        ag.add_asset(Asset(asset_id=aid, sector=Sector.POWER,
+                           asset_type=ctype, criticality=3, is_crown_jewel=cj))
+    ag.add_edge("s", "a", exploit_cost=1, cut_cost=10)
+    ag.add_edge("a", "t", exploit_cost=1, cut_cost=1, protected=True)
+    ag.add_edge("s", "b", exploit_cost=1, cut_cost=3)
+    ag.add_edge("b", "t", exploit_cost=1, cut_cost=3)
+    cut_edges, cost = min_cost_interdiction(ag, ["s"], "t")
+    assert ("a", "t") not in cut_edges
+    # Two disjoint paths. A→T is ∞ so SAT must be cut at S→A (10);
+    # SBT costs 3. Min-cut is 13 — not 3, which would leave SAT open.
+    assert cost == 13.0
+
+
+def test_greedy_isolate_frontier_exceeds_min_cut_on_redecho():
+    from chakravyuh.graph.interdiction import (
+        greedy_isolate_frontier_cost,
+        plan_interdiction,
+    )
+    from chakravyuh.scenarios import redecho
+
+    ag = redecho.build_graph()
+    plan = plan_interdiction(
+        ag, "INC",
+        ["it_jump_host", "it_workstation", "engineer_cred"],
+        redecho.CROWN_JEWEL,
+    )
+    _, greedy, _ = greedy_isolate_frontier_cost(
+        ag, ["it_jump_host", "it_workstation", "engineer_cred"]
+    )
+    assert greedy > plan.availability_cost
+    assert plan.greedy_availability_cost == greedy
+
+
 def test_unknown_crown_jewel_raises():
     ag = _simple_graph()
     with pytest.raises(ValueError):

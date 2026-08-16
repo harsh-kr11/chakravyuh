@@ -7,17 +7,13 @@ URL that accepts ``{"text": "..."}`` as a JSON POST, which is exactly what
 """
 from __future__ import annotations
 
-from ..schemas import ContainmentAction
+from ..schemas import ContainmentAction, format_target
 from .webhook import WebhookConnector
 
 
 class SlackConnector(WebhookConnector):
     def _payload(self, action: ContainmentAction, incident_id: str) -> dict:
-        target = (
-            " -> ".join(action.target)
-            if isinstance(action.target, tuple)
-            else action.target
-        )
+        target = format_target(action.target)
         text = (
             f":shield: *CHAKRAVYUH* executed `{action.action_type.value}` "
             f"on `{target}` for incident `{incident_id}`.\n"

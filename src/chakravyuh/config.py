@@ -39,6 +39,13 @@ def _get_float(key: str, default: float) -> float:
         return default
 
 
+def _get_int(key: str, default: int) -> int:
+    try:
+        return int(os.environ.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
 @dataclass
 class Settings:
     # --- LLM (all optional; default is deterministic, no-LLM mode) --------- #
@@ -93,7 +100,7 @@ def load_settings() -> Settings:
         anomaly_threshold=_get_float("CHAKRAVYUH_ANOMALY_THRESHOLD", 0.5),
         blast_radius_threshold=_get_float("CHAKRAVYUH_BLAST_RADIUS", 5.0),
         api_host=_get("CHAKRAVYUH_API_HOST", "127.0.0.1"),
-        api_port=int(_get("CHAKRAVYUH_API_PORT", "8080")),
+        api_port=_get_int("CHAKRAVYUH_API_PORT", 8080),
         db_path=_get("CHAKRAVYUH_DB_PATH", "data/chakravyuh.db"),
         neo4j_uri=_get("CHAKRAVYUH_NEO4J_URI", ""),
         neo4j_user=_get("CHAKRAVYUH_NEO4J_USER", "neo4j"),

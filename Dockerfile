@@ -10,7 +10,7 @@ WORKDIR /app
 # Install dependencies first (better layer caching)
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install --upgrade pip && pip install ".[api]"
+RUN pip install --upgrade pip && pip install ".[api,detect]"
 
 # Non-root user
 RUN useradd -m -u 10001 chakra && chown -R chakra:chakra /app

@@ -53,7 +53,8 @@ from ..config import load_settings
 from ..connectors import make_connector
 from ..export import result_to_dict
 from ..orchestrator import Orchestrator
-from ..scenarios import redecho
+from ..scenarios.catalog import DEFAULT_ID, list_meta, payload
+from ..scenarios.catalog import get as get_scenario
 from ..schemas import AuditRecord, ContainmentAction, TelemetryEvent
 from ..store import IncidentStore
 
@@ -81,7 +82,7 @@ def get_store() -> IncidentStore:
 
 class AnalyzeRequest(BaseModel):
     incident_id: str = "INC-0001"
-    scenario: str = "redecho"        # bundled topology; only this one for now
+    scenario: str = DEFAULT_ID
     anomaly_threshold: float | None = None
     mode: Literal["observe", "respond"] = "respond"
     # Bring-your-own telemetry: a real translator's output. Omit to use the
@@ -113,7 +114,8 @@ def root() -> dict[str, Any]:
         "version": __version__,
         "description": "Incident-time cross-sector attack-path interdiction",
         "endpoints": [
-            "/healthz", "/scenario", "/schema/telemetry-event",
+            "/healthz", "/readyz", "/scenarios", "/scenario",
+            "/schema/telemetry-event",
             "/incidents/analyze", "/incidents/{id}/approve",
             "/incidents", "/incidents/{id}",
             "/incidents/{id}/briefing", "/incidents/{id}/ask",
@@ -126,30 +128,48 @@ def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/readyz")
+def readyz() -> dict[str, Any]:
+    settings = load_settings()
+    try:
+        import sklearn  # noqa: F401
+        detect = "sklearn"
+    except ImportError:
+        detect = "heuristic"
+    try:
+        from ..knowledge.graph import get_graph
+        kg = get_graph() is not None
+    except Exception:
+        kg = False
+    store_ok = True
+    try:
+        get_store().list(limit=1)
+    except Exception:
+        store_ok = False
+    return {
+        "status": "ok",
+        "detect": detect,
+        "llm_provider": settings.llm_provider,
+        "llm_enabled": settings.llm_enabled,
+        "neo4j": kg,
+        "store": store_ok,
+    }
+
+
+@app.get("/scenarios")
+def scenarios() -> list[dict[str, Any]]:
+    return list_meta()
+
+
 @app.get("/scenario")
-def scenario() -> dict[str, Any]:
-    ag = redecho.build_graph()
-    nodes = [
-        {
-            "id": n,
-            "sector": ag.asset(n).sector.value,
-            "type": ag.asset(n).asset_type.value,
-            "crown_jewel": ag.asset(n).is_crown_jewel,
-        }
-        for n in ag.g.nodes
-    ]
-    edges = [
-        {
-            "src": u, "dst": v,
-            "exploit_cost": d["exploit_cost"],
-            "cut_cost": d["cut_cost"],
-            "protected": d["protected"],
-        }
-        for u, v, d in ag.g.edges(data=True)
-    ]
-    events = [e.model_dump(mode="json") for e in redecho.telemetry_stream()]
-    return {"nodes": nodes, "edges": edges, "events": events,
-            "crown_jewel": redecho.CROWN_JEWEL}
+def scenario(id: str = DEFAULT_ID) -> dict[str, Any]:
+    try:
+        mod = get_scenario(id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404, detail=f"unknown scenario {id!r}"
+        ) from exc
+    return payload(mod)
 
 
 @app.get("/schema/telemetry-event")
@@ -165,16 +185,25 @@ def telemetry_event_schema() -> dict[str, Any]:
 def analyze(
     req: AnalyzeRequest, store: IncidentStore = Depends(get_store)
 ) -> dict[str, Any]:
+    try:
+        mod = get_scenario(req.scenario)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"unknown scenario {req.scenario!r}"
+        ) from exc
     orch = _orchestrator(req)
     if req.events is not None:
-        adapter = ReplayAdapter(redecho.build_graph(), req.events, redecho.CROWN_JEWEL)
+        adapter = ReplayAdapter(mod.build_graph(), req.events, mod.CROWN_JEWEL)
     else:
-        adapter = ScenarioAdapter(redecho)
+        adapter = ScenarioAdapter(mod)
     result = orch.run_adapter(
         adapter, incident_id=req.incident_id, observe_only=req.mode == "observe",
     )
     data = result_to_dict(result, orch)
     data["mode"] = req.mode
+    data["scenario"] = req.scenario
+    data["meta"] = mod.META
+    data["historical"] = mod.historical()
     _apply_actual_outcome(data)
     data["db_id"] = store.save(req.incident_id, req.scenario, data)
     return data
@@ -189,22 +218,19 @@ def _get_incident_or_404(row_id: int, store: IncidentStore) -> dict[str, Any]:
 
 def _apply_actual_outcome(data: dict[str, Any]) -> None:
     """Recompute the *actual*, not just planned, outcome from real execution
-    state. ``interdiction.crown_jewel_protected``/``cascade_averted`` reflect
-    the min-cut plan's theoretical guarantee *if fully executed* -- they do
-    NOT change if a human later denies a required action. Any API consumer
-    checking those two fields alone after a partial approval would get a
-    wrong answer, so this adds the honest, real-time equivalents.
+    state. ``all([])`` is True in Python — an empty action list must not look
+    like a successful containment.
     """
-    executions = data["executions"]
-    all_executed = all(e["executed"] for e in executions)
+    executions = data.get("executions") or []
+    all_executed = bool(executions) and all(e.get("executed") for e in executions)
     interdiction = data["interdiction"]
     interdiction["crown_jewel_protected_now"] = (
-        bool(interdiction["crown_jewel_protected"]) and all_executed
+        bool(interdiction.get("crown_jewel_protected")) and all_executed
     )
     interdiction["cascade_averted_now"] = (
-        bool(interdiction["cascade_averted"]) and all_executed
+        bool(interdiction.get("cascade_averted")) and all_executed
     )
-    data["has_pending"] = any(e["pending"] for e in executions)
+    data["has_pending"] = any(e.get("pending") for e in executions)
 
 
 def _append_audit_record(
@@ -244,7 +270,7 @@ def approve(
     row_id: int, req: ApproveRequest, store: IncidentStore = Depends(get_store)
 ) -> dict[str, Any]:
     data = _get_incident_or_404(row_id, store)
-    executions = data["executions"]
+    executions = data.get("executions") or []
     pending_idxs = [i for i, e in enumerate(executions) if e.get("pending")]
     if req.action_index is not None:
         pending_idxs = [i for i in pending_idxs if i == req.action_index]
@@ -334,7 +360,10 @@ def list_incidents(
 def get_incident(
     row_id: int, store: IncidentStore = Depends(get_store)
 ) -> dict[str, Any]:
-    return _get_incident_or_404(row_id, store)
+    data = _get_incident_or_404(row_id, store)
+    _apply_actual_outcome(data)
+    data["db_id"] = row_id
+    return data
 
 
 @app.get("/incidents/{row_id}/briefing")

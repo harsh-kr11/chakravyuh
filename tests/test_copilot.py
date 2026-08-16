@@ -28,11 +28,22 @@ def test_brief_without_llm_configured_returns_grounded_context(incident_dict):
     assert "context" in out.text.lower()
 
 
-def test_ask_without_llm_configured_returns_grounded_context(incident_dict):
+def test_ask_without_llm_returns_grounded_answer(incident_dict):
     copilot = CopilotAgent(settings=Settings(llm_provider="none"))
     out = copilot.ask(incident_dict, "What credential-related techniques were used?")
     assert out.llm_used is False
     assert isinstance(out.citations, list)
+
+
+def test_ask_with_malformed_history_does_not_crash(incident_dict):
+    copilot = CopilotAgent(settings=Settings(llm_provider="none"))
+    out = copilot.ask(
+        incident_dict,
+        "what happened?",
+        history=[{"oops": True}, "not a dict", {"question": "x", "answer": "y"}],
+    )
+    assert isinstance(out.text, str)
+    assert out.llm_used is False
 
 
 def test_copilot_never_mutates_the_incident(incident_dict):

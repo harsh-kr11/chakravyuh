@@ -26,6 +26,10 @@ live API — all running on a synthetic cross-sector scenario.
       interdiction card with Approve, MTTD/MTTR, report + audit tabs, wired
       to the live API (history + copilot tabs included).
       (live-growing graph from a stream is next)
+- [x] **Case library**: five runnable scenarios (`redecho`, `colonial`,
+      `ukraine2015`, `aiims`, `synnovis`) through the same orchestrator.
+      Public-source reconstructions, not victim telemetry.
+- [ ] **CybORGAdapter** (closed-loop CAGE) — roadmap only; not shipped.
 - [ ] **LangGraph orchestrator** variant behind the same interface.
 - [ ] **Weighted exploit costs** from CVSS/EPSS/KEV; probabilistic paths
       (`-log p` edge weights).

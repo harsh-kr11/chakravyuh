@@ -1,8 +1,8 @@
 """Command-line interface for CHAKRAVYUH.
 
-    chakravyuh demo                 run the narrated demo
-    chakravyuh analyze [--out DIR]  run the pipeline, optionally export a bundle
-    chakravyuh serve                start the REST API (needs the [api] extra)
+    chakravyuh demo [--scenario ID] [--hitl]
+    chakravyuh analyze [--scenario ID] [--out DIR]
+    chakravyuh serve
 """
 from __future__ import annotations
 
@@ -14,18 +14,29 @@ from .adapters import ScenarioAdapter
 from .config import load_settings
 from .export import result_to_dict, write_bundle
 from .orchestrator import Orchestrator
-from .scenarios import redecho
+from .scenarios.catalog import DEFAULT_ID
+from .scenarios.catalog import get as get_scenario
 
 
-def _cmd_demo(_args: argparse.Namespace) -> int:
+def _cmd_demo(args: argparse.Namespace) -> int:
     from .demo import main as demo_main
 
-    return demo_main()
+    argv: list[str] = []
+    if args.scenario:
+        argv += ["--scenario", args.scenario]
+    if getattr(args, "hitl", False):
+        argv.append("--hitl")
+    return demo_main(argv)
 
 
 def _cmd_analyze(args: argparse.Namespace) -> int:
+    try:
+        mod = get_scenario(args.scenario)
+    except KeyError:
+        print(f"unknown scenario {args.scenario!r}", file=sys.stderr)
+        return 2
     orch = Orchestrator()
-    result = orch.run_adapter(ScenarioAdapter(redecho))
+    result = orch.run_adapter(ScenarioAdapter(mod))
     if args.out:
         paths = write_bundle(result, orch, args.out)
         print(json.dumps(paths, indent=2))
@@ -45,7 +56,7 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     uvicorn.run(
         "chakravyuh.api.app:app",
         host=args.host or settings.api_host,
-        port=args.port or settings.api_port,
+        port=args.port if args.port is not None else settings.api_port,
     )
     return 0
 
@@ -54,9 +65,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="chakravyuh")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("demo", help="run the narrated demo")
+    p_demo = sub.add_parser("demo", help="run the narrated demo")
+    p_demo.add_argument("--scenario", default=DEFAULT_ID)
+    p_demo.add_argument("--hitl", action="store_true",
+                        help="leave OT actions pending (real HITL gate)")
 
     p_analyze = sub.add_parser("analyze", help="run the pipeline")
+    p_analyze.add_argument("--scenario", default=DEFAULT_ID)
     p_analyze.add_argument("--out", help="directory to write an incident bundle")
 
     p_serve = sub.add_parser("serve", help="start the REST API")

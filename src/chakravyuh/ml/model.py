@@ -92,7 +92,10 @@ def get_model(model_path: str = DEFAULT_MODEL_PATH) -> UEBAModel | None:
             pass  # corrupt/incompatible cache — retrain below
 
     model = train()
-    model.save(model_path)
+    try:
+        model.save(model_path)
+    except Exception:
+        pass  # in-memory model is enough; disk is optional
     _cached = model
     return model
 
