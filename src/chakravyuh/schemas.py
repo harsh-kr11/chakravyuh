@@ -15,6 +15,13 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+def format_target(target: str | tuple | list) -> str:
+    """Human-readable action target (edges as ``src -> dst``)."""
+    if isinstance(target, (tuple, list)):
+        return " -> ".join(str(p) for p in target)
+    return str(target)
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -135,7 +142,8 @@ class InterdictionPlan(BaseModel):
     availability_cost: float = 0.0       # sum of est_disruption
     crown_jewel_protected: bool = False
     cascade_averted: bool = False
-    baseline_availability_cost: float = 0.0  # naive containment cost, for contrast
+    baseline_availability_cost: float = 0.0  # naive isolate-crown-jewel cost
+    greedy_availability_cost: float = 0.0  # isolate-every-frontier-host cost
     notes: str = ""
 
 

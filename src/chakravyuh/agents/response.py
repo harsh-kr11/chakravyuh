@@ -61,11 +61,14 @@ class ResponseAgent(Agent):
         """Carry out an approved action. Returns an error string, or None on
         success. Uses the configured connector if present; otherwise simulates.
         """
-        self.isolated.add(str(action.target))
         if self.connector is None:
+            self.isolated.add(str(action.target))
             return None
         result = self.connector.execute(action, incident_id=incident_id)
-        return None if result.ok else result.detail
+        if result.ok:
+            self.isolated.add(str(action.target))
+            return None
+        return result.detail
 
     def process(
         self, actions: list[ContainmentAction], incident_id: str = ""

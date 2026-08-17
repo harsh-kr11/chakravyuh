@@ -26,7 +26,10 @@ class DetectionAgent(Agent):
         model = get_model()
         if model is None:
             return float(event.features.get("anomaly_score", 0.0))
-        return model.score(extract_features(event.features))
+        try:
+            return model.score(extract_features(event.features))
+        except Exception:
+            return float(event.features.get("anomaly_score", 0.0))
 
     def process(self, events: list[TelemetryEvent]) -> list[AnomalySignal]:
         signals: list[AnomalySignal] = []

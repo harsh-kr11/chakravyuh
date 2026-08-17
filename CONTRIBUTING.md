@@ -10,8 +10,8 @@ reference for incident-time cross-sector attack-path interdiction.
 - **Tests required.** New behaviour needs tests. Run `make test` before
   pushing. Keep coverage from regressing.
 - **Determinism.** Core detection/interdiction/audit logic must stay
-  deterministic (seeded). LLMs are only for attribution reasoning and NL
-  rationale, behind an interface.
+  deterministic (seeded). The LLM copilot is read-only explanation of an
+  already-computed incident; it never chooses the cut.
 - **No secrets, no live targets.** Never commit credentials, real network
   data, or connect adapters to production systems.
 

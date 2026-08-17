@@ -59,7 +59,10 @@ class AttackGraph:
         return [n for n, d in self.g.nodes(data=True) if d.get("crown_jewel")]
 
     def asset(self, node: str) -> Asset:
-        return self.g.nodes[node]["asset"]
+        try:
+            return self.g.nodes[node]["asset"]
+        except KeyError as exc:
+            raise KeyError(f"unknown asset {node!r}") from exc
 
     def attacker_min_cost(self, sources: list[str], target: str) -> float:
         """Cheapest attacker path-cost from any source to target (inf if none)."""
@@ -88,6 +91,8 @@ class AttackGraph:
         connectivity to) an OT asset. Revoking a purely-IT credential runs
         autonomously; cutting a link into an OT device is gated.
         """
+        if not self.g.has_edge(src, dst):
+            raise KeyError(f"unknown edge {src!r} -> {dst!r}")
         data = self.g.edges[src, dst]
         atype: ActionType = data.get("action_type", ActionType.BLOCK_LINK)
 

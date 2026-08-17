@@ -53,7 +53,9 @@
   .seg-btn{border:none;border-radius:0;padding:7px 14px;font:600 11px system-ui;background:transparent;color:var(--muted)}
   .seg-btn:hover{background:var(--line);color:var(--ink)}
   .seg-btn.on{background:var(--saffron);color:#1a1200}
-  .mode-desc{font-size:11px;color:var(--muted)}
+  .mode-desc{font-size:11px;color:var(--muted);flex:1;min-width:180px}
+  .case-select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--ink);
+    padding:7px 10px;font:600 11px system-ui;max-width:280px}
   /* ---- middle ---- */
   .main{display:grid;grid-template-columns:300px 1fr 320px;gap:1px;min-height:440px}
   .rail{background:var(--panel2);padding:16px;overflow:auto;max-height:100%}
@@ -151,7 +153,10 @@
     padding:9px 11px;font:500 12px system-ui}
   .ask-row input:focus{outline:none;border-color:var(--saffron)}
   .llm-off{font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:2px 6px;display:inline-block;margin-bottom:6px}
-  @media (max-width:920px){.main{grid-template-columns:1fr}.rail{display:none}}
+  @media (max-width:920px){
+    .main{grid-template-columns:1fr;grid-template-rows:auto minmax(360px,1fr) auto}
+    .rail{display:block;max-height:280px}
+  }
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -172,6 +177,8 @@
   </div>
 
   <div class="modebar">
+    <span class="lab">Case</span>
+    <select class="case-select" id="caseSelect" title="Public-source reconstructions plus the RedEcho illustration"></select>
     <span class="lab">Mode</span>
     <div class="segmented">
       <button class="seg-btn" data-mode="observe">Observe only</button>
@@ -250,6 +257,8 @@ document.getElementById('apiBtn').addEventListener('click', () => {
     document.getElementById('apiBtn').textContent = 'api: ' + API; init(); }
 });
 
+function escapeHtml(s){ const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
 async function api(path, opts){
   const res = await fetch(API + path, Object.assign({headers:{'content-type':'application/json'}}, opts || {}));
   if (!res.ok) { const body = await res.text().catch(()=> ''); throw new Error(`${res.status} ${path}: ${body.slice(0,200)}`); }
@@ -257,7 +266,8 @@ async function api(path, opts){
 }
 
 /* ---------- mode toggle ---------- */
-let currentMode = 'respond';
+let currentScenarioId = 'redecho';
+let caseList = [];
 const MODE_DESC = {
   observe: 'Nothing is executed, not even low-risk actions — just the detected anomalies, the plan CHAKRAVYUH would take, and the report.',
   respond: 'Low-risk actions run automatically; anything touching OT waits for a real approval below.',
@@ -289,12 +299,11 @@ function banner(txt, kind){ // kind: 'safe' | 'error' | 'warn' | undefined
 }
 
 /* ---------- load scenario & build the static graph ---------- */
-async function loadScenario(){
-  const sc = await api('/scenario');
-  const hospital = (sc.nodes.find(n => n.type === 'service_load') || {}).id;
+async function loadScenario(id){
+  const sc = await api('/scenario?id=' + encodeURIComponent(id || currentScenarioId));
+  currentScenarioId = sc.id || id || 'redecho';
+  const protectedLoad = (sc.nodes.find(n => n.type === 'service_load') || {}).id;
 
-  // BFS hop-count from the internet-facing node gives the same concentric
-  // rings the original hand-authored layout used, for any graph shape.
   const entry = (sc.nodes.find(n => n.type === 'internet') || sc.nodes[0]).id;
   const adj = {};
   sc.nodes.forEach(n => adj[n.id] = []);
@@ -311,7 +320,9 @@ async function loadScenario(){
     nodes: sc.nodes.map(n => ({...n, ring: ring[n.id], ot: n.type.startsWith('ot_')})),
     edges: sc.edges,
     crown_jewel: sc.crown_jewel,
-    hospital,
+    hospital: protectedLoad,
+    meta: sc,
+    historical: sc.historical || {},
   };
   drawGraph();
 }
@@ -368,7 +379,7 @@ BEATS.forEach((b, i) => { const d = document.createElement('div'); d.className =
 function setBeat(i){ for (let k = 0; k < BEATS.length; k++) { const e = document.getElementById('beat' + k); e.className = 'beat' + (k < i ? ' done' : k === i ? ' on' : ''); } }
 
 function feedCard(k, v, sev){ const c = document.createElement('div'); c.className = 'card';
-  c.innerHTML = `<div class="k">${k}</div><div class="v ${sev ? 'sev' : ''}">${v}</div>`;
+  c.innerHTML = `<div class="k">${escapeHtml(k)}</div><div class="v ${sev ? 'sev' : ''}">${escapeHtml(v)}</div>`;
   document.getElementById('feed').appendChild(c); requestAnimationFrame(() => c.classList.add('show')); }
 
 function glowNode(id, color){ const n = nodeEls[id]; if (!n) return; n.circle.setAttribute('stroke', color);
@@ -439,7 +450,7 @@ async function run(){
   try {
     data = await api('/incidents/analyze', {
       method: 'POST',
-      body: JSON.stringify({incident_id: 'INC-' + Date.now(), mode: currentMode}),
+      body: JSON.stringify({incident_id: 'INC-' + Date.now(), mode: currentMode, scenario: currentScenarioId}),
     });
   } catch (err) {
     banner('✕ Could not reach the API: ' + err.message, 'error');
@@ -463,7 +474,7 @@ async function run(){
   for (let i = 0; i < R.techniques.length; i++) { const t = R.techniques[i];
     if (i < PATH.length) glowEdge(PATH[i][0], PATH[i][1], 'var(--alarm)');
     const chip = document.createElement('div'); chip.className = 'chip';
-    chip.innerHTML = `${t.technique_id}<small>${t.technique_name}</small>`; strip.appendChild(chip);
+    chip.innerHTML = `${escapeHtml(t.technique_id)}<small>${escapeHtml(t.technique_name)}</small>`; strip.appendChild(chip);
     requestAnimationFrame(() => chip.classList.add('show')); await wait(600); }
   feedCard('Attribution', 'Confirmed intrusion · lateral movement toward OT'); await wait(400);
 
@@ -491,7 +502,7 @@ async function run(){
   } else if (R.has_pending) {
     banner('Interdiction ready · awaiting real analyst approval for OT action');
     status('Containment proposed', 'live');
-    document.getElementById('runBtn').disabled = false; running = false;
+    running = false;
   } else {
     finishContainment();
   }
@@ -509,7 +520,7 @@ function finishContainment(){
   if (deniedGated) {
     banner('⚠ A required action was denied — crown jewel protection is not guaranteed', 'warn');
   } else if (protectedOk) {
-    banner('✔ Attack contained · crown jewel safe · hospital power preserved', 'safe');
+    banner('✔ Attack contained · crown jewel safe · protected load preserved', 'safe');
   } else {
     banner('⚠ Not all actions have executed yet — crown jewel protection is not guaranteed', 'warn');
   }
@@ -543,12 +554,21 @@ function renderPlan(){
       cls = exec.executed ? 'done-tag' : 'auto';
     }
     const errLine = exec.pending && exec.error
-      ? `<div style="font-size:10px;color:var(--alarm);width:100%;margin-top:2px">connector error: ${exec.error}</div>` : '';
-    return `<div class="action"><span class="tt">${a.action_type.replace(/_/g, ' ')}</span>
-      <span>${tgt}</span><span class="gate ${cls}">${tag}</span>${errLine}</div>`;
+      ? `<div style="font-size:10px;color:var(--alarm);width:100%;margin-top:2px">connector error: ${escapeHtml(exec.error)}</div>` : '';
+    return `<div class="action"><span class="tt">${escapeHtml(a.action_type.replace(/_/g, ' '))}</span>
+      <span>${escapeHtml(tgt)}</span><span class="gate ${cls}">${escapeHtml(tag)}</span>${errLine}</div>`;
   }).join('');
   const smart = I.availability_cost, naive = I.baseline_availability_cost;
-  const smartPct = Math.max(4, smart / naive * 100), naivePct = 100;
+  const greedy = I.greedy_availability_cost || 0;
+  const denom = Math.max(naive, greedy, smart, 1);
+  const smartPct = Math.max(4, smart / denom * 100), naivePct = Math.max(4, naive / denom * 100);
+  const hist = (R.historical || S.historical || {});
+  const histLine = hist.decision
+    ? `<div style="font-size:11px;color:var(--muted);margin-top:10px;border-top:1px solid var(--line);padding-top:8px"><b>Historical:</b> ${escapeHtml(hist.decision)}</div>` : '';
+  let greedyBar = '';
+  if (greedy > smart) {
+    greedyBar = `<div class="bar"><span class="lab">Greedy</span><span class="track"><span class="fill naive" id="fGreedy"></span></span><span class="num bad">${greedy}</span></div>`;
+  }
 
   let actionArea = '';
   if (currentMode === 'observe') {
@@ -571,17 +591,23 @@ function renderPlan(){
      <div class="bars">
        <div class="bar"><span class="lab">CHAKRAVYUH</span><span class="track"><span class="fill smart" id="fSmart"></span></span><span class="num ok">${smart}</span></div>
        <div class="bar"><span class="lab">Naive</span><span class="track"><span class="fill naive" id="fNaive"></span></span><span class="num bad">${naive}</span></div>
+       ${greedyBar}
      </div>
-     <div style="font-size:10px;color:var(--muted);margin-top:8px">availability cost (lower is better). Naive "isolate everything" severs the hospital lifeline.</div>
+     <div style="font-size:10px;color:var(--muted);margin-top:8px">availability cost (lower is better). Naive isolate-jewel severs the protected load.</div>
+     ${histLine}
      ${actionArea}
    </div>
    <div class="metrics">
      <div class="metric"><div class="n ok" id="mProt">—</div><div class="l">Crown jewel</div></div>
      <div class="metric"><div class="n ok" id="mCasc">—</div><div class="l">Cascade</div></div>
-     <div class="metric"><div class="n" id="mMttd">${R.metrics.mttd_steps}</div><div class="l">MTTD steps</div></div>
+     <div class="metric"><div class="n" id="mMttd">${R.metrics.mttd_steps == null ? '—' : R.metrics.mttd_steps}</div><div class="l">MTTD steps</div></div>
      <div class="metric"><div class="n" id="mMttr">${R.metrics.mttr_steps}</div><div class="l">MTTR actions</div></div>
    </div>`;
-  setTimeout(() => { document.getElementById('fSmart').style.width = smartPct + '%'; document.getElementById('fNaive').style.width = naivePct + '%'; }, 80);
+  setTimeout(() => {
+    const fs = document.getElementById('fSmart'); if (fs) fs.style.width = smartPct + '%';
+    const fn = document.getElementById('fNaive'); if (fn) fn.style.width = naivePct + '%';
+    const fg = document.getElementById('fGreedy'); if (fg) fg.style.width = Math.max(4, greedy / denom * 100) + '%';
+  }, 80);
 
   const approveBtn = document.getElementById('approveBtn');
   const denyBtn = document.getElementById('denyBtn');
@@ -647,7 +673,7 @@ async function renderHistory(){
     <div class="hist-item" data-id="${r.id}">
       <div class="hi-id">#${r.id} · ${r.incident_id}</div>
       <div class="hi-meta">
-        <span class="${r.crown_jewel_protected ? 'hi-ok' : 'hi-bad'}">${r.crown_jewel_protected ? 'protected' : 'at risk'}</span>
+        <span class="${r.has_pending ? 'hi-bad' : (r.crown_jewel_protected ? 'hi-ok' : 'hi-bad')}">${r.has_pending ? 'pending' : (r.crown_jewel_protected ? 'protected' : 'at risk')}</span>
         <span class="${r.cascade_averted ? 'hi-ok' : 'hi-bad'}">${r.cascade_averted ? 'cascade averted' : 'cascade risk'}</span>
         <span>cost ${r.availability_cost}</span>
         <span>${new Date(r.created_at).toLocaleString()}</span>
@@ -680,13 +706,12 @@ function appendChat(role, text, citations, llmUsed){
   div.className = 'chat-msg ' + role;
   const offNote = role === 'bot' && llmUsed === false
     ? '<div class="llm-off">No LLM provider configured — showing retrieved context only.</div>' : '';
-  const cites = (citations || []).map(c => `<span class="cite-chip">${c}</span>`).join('');
+  const cites = (citations || []).map(c => `<span class="cite-chip">${escapeHtml(c)}</span>`).join('');
   div.innerHTML = offNote + escapeHtml(text) + (cites ? `<div class="cites">${cites}</div>` : '');
   thread.appendChild(div);
   thread.scrollTop = thread.scrollHeight;
   return div;
 }
-function escapeHtml(s){ const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 document.getElementById('briefBtn').addEventListener('click', async () => {
   if (!currentDbId) { appendChat('bot', 'Run or load an incident first.'); return; }
@@ -734,20 +759,55 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
 
 /* ---------- boot ---------- */
 document.getElementById('runBtn').addEventListener('click', run);
-document.getElementById('replayBtn').addEventListener('click', () => { if (!running) reset(); });
+document.getElementById('replayBtn').addEventListener('click', () => { if (!running) init(); });
 setInterval(() => { document.getElementById('clock').textContent = new Date().toISOString().slice(11, 19) + ' UTC'; }, 1000);
+
+function showIdle(){
+  if (!S || !S.meta) return;
+  document.getElementById('feed').innerHTML = '';
+  document.getElementById('planHost').innerHTML = '';
+  feedCard('CHAKRAVYUH', 'Smallest containment that still keeps the protected load up. Pick a case, then Run interdiction.');
+  feedCard(S.meta.title || 'Case', S.meta.one_liner || 'Run interdiction to compute the cut.');
+  feedCard('Honesty', S.meta.disclaimer || '');
+  document.getElementById('planHost').innerHTML =
+    '<div class="observe-note">Idle — historical decision vs the min-cut will appear here after Run.</div>';
+}
+
+async function fillCases(){
+  const sel = document.getElementById('caseSelect');
+  try { caseList = await api('/scenarios'); } catch (err) { caseList = []; }
+  sel.innerHTML = caseList.map(c =>
+    `<option value="${escapeHtml(c.id)}">${escapeHtml(c.title)}</option>`).join('');
+  sel.value = currentScenarioId;
+  sel.onchange = async () => {
+    if (running) return;
+    currentScenarioId = sel.value;
+    await loadScenario(currentScenarioId);
+    showIdle();
+  };
+}
 
 async function init(){
   status('Connecting…', 'live');
   try {
-    await loadScenario();
+    await fillCases();
+    await loadScenario(currentScenarioId);
+    showIdle();
     await renderHistory();
-    status('System nominal', null);
+    try {
+      const r = await api('/readyz');
+      const bits = [r.detect === 'sklearn' ? 'UEBA' : 'heuristic detect',
+                    r.llm_enabled ? ('LLM ' + r.llm_provider) : 'LLM off',
+                    r.neo4j ? 'Neo4j' : 'offline ATT&CK'];
+      status('System nominal · ' + bits.join(' · '), null);
+    } catch (e) {
+      status('System nominal', null);
+    }
     document.getElementById('runBtn').disabled = false;
   } catch (err) {
     status('API unreachable', 'bad');
-    banner(`✕ Can't reach the API at ${API} — start it with "chakravyuh serve" (see README), then click Replay.`, 'error');
-    document.getElementById('historyBody').innerHTML = `<div class="empty">Could not load: ${err.message}</div>`;
+    banner(`✕ Can't reach the API at ${API} — start it with "chakravyuh serve", then click Replay.`, 'error');
+    document.getElementById('historyBody').innerHTML = `<div class="empty">Could not load: ${escapeHtml(err.message)}</div>`;
   }
 }
 init();

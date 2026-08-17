@@ -51,3 +51,20 @@ def test_get_model_persists_and_reloads(tmp_path, monkeypatch):
     x = np.array([1, 4, 1, 1.2, 2.5, 2, 1.5], dtype=float)
     assert m1.score(x) == pytest.approx(m2.score(x))
     reset_cache()
+
+
+def test_get_model_save_failure_keeps_in_memory(tmp_path, monkeypatch):
+    from chakravyuh.ml import model as model_mod
+
+    reset_cache()
+
+    def boom(self, path):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(model_mod.UEBAModel, "save", boom)
+    path = str(tmp_path / "ueba.joblib")
+    m = model_mod.get_model(path)
+    assert m is not None
+    x = np.array([1, 4, 1, 1.2, 2.5, 2, 1.5], dtype=float)
+    assert 0.0 <= m.score(x) <= 1.0
+    reset_cache()

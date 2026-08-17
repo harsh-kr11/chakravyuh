@@ -1,33 +1,65 @@
 """Narrated command-line demo of CHAKRAVYUH.
 
-Runs the RedEcho-style cross-sector scenario end to end and prints the same
-beats the on-stage dashboard would show. Deterministic and dependency-light.
-
     python -m chakravyuh.demo
+    python -m chakravyuh.demo --scenario colonial
+    python -m chakravyuh.demo --hitl
 """
 from __future__ import annotations
 
+import argparse
+
+from .agents import pending_approval
 from .orchestrator import Orchestrator
-from .scenarios import redecho
+from .scenarios.catalog import DEFAULT_ID
+from .scenarios.catalog import get as get_scenario
+from .schemas import format_target
 
 
 def _rule(char: str = "-") -> str:
     return char * 68
 
 
-def main() -> int:
-    print(_rule("="))
-    print(" CHAKRAVYUH  |  National Cyber-Interdiction Grid  (demo)")
-    print(_rule("="))
+def _cost(value: float) -> str:
+    if value == float("inf"):
+        return "UNREACHABLE"
+    return f"{value:.1f}"
 
-    ag = redecho.build_graph()
-    events = redecho.telemetry_stream()
-    orch = Orchestrator()
-    result = orch.run(ag, events, crown_jewel=redecho.CROWN_JEWEL)
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="chakravyuh-demo")
+    parser.add_argument("--scenario", default=DEFAULT_ID,
+                        help="catalog id (default: redecho)")
+    parser.add_argument(
+        "--hitl", action="store_true",
+        help="real pending approval for OT (does not execute gated actions). "
+             "Not observe-only: ungated actions still run.",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        mod = get_scenario(args.scenario)
+    except KeyError:
+        print(f"unknown scenario {args.scenario!r}")
+        return 2
+
+    meta = mod.META
+    print(_rule("="))
+    print(" CHAKRAVYUH  |  incident-time interdiction")
+    print(_rule("="))
+    print(f" Case: {meta['title']}  [{meta['kind']}]")
+    print(f" {meta['one_liner']}")
+    print(f" {meta['disclaimer']}")
+
+    ag = mod.build_graph()
+    events = mod.telemetry_stream()
+    orch = Orchestrator(gate=pending_approval) if args.hitl else Orchestrator()
+    result = orch.run(ag, events, crown_jewel=mod.CROWN_JEWEL)
 
     print("\n[BEAT 1] Detection (behavioural, no signatures)")
+    if not result.context.anomalies:
+        print("   (no anomalies above threshold)")
     for s in result.context.anomalies:
-        print(f"   ! anomaly on {s.asset_id:<20} score={s.score:.2f}")
+        print(f"   ! anomaly on {s.asset_id:<22} score={s.score:.2f}")
 
     print("\n[BEAT 2] Attribution (MITRE ATT&CK)")
     for t in result.context.techniques:
@@ -36,46 +68,65 @@ def main() -> int:
     print(f"   attacker frontier: {result.context.attacker_frontier}")
 
     print("\n[BEAT 3] Cross-sector cascade")
-    print(f"   {result.cascade.narrative or 'no cascade risk'}")
+    print(f"   {result.cascade.narrative or 'no cascade risk flagged'}")
 
     print("\n[BEAT 4] Interdiction (the minimal-disruption cut)")
     p = result.plan
     for a in p.actions:
         gate = "  (HUMAN-GATED)" if a.requires_human_gate else ""
-        print(f"   * {a.action_type.value:<18} {str(a.target):<32}"
+        print(f"   * {a.action_type.value:<18} {format_target(a.target):<36}"
               f" disruption={a.est_disruption}{gate}")
-    after = "BLOCKED" if p.crown_jewel_protected else f"{p.attacker_cost_after:.1f}"
+    after = "BLOCKED" if p.crown_jewel_protected else _cost(p.attacker_cost_after)
     print(f"   attacker path-cost to crown jewel: "
-          f"{p.attacker_cost_before:.1f} -> {after}")
-    print(f"   availability cost: {p.availability_cost:.1f}   "
-          f"(naive baseline: {p.baseline_availability_cost:.1f})")
-    print(f"   crown jewel protected: {p.crown_jewel_protected}   "
-          f"cascade averted: {p.cascade_averted}")
+          f"{_cost(p.attacker_cost_before)} -> {after}")
 
-    print("\n[BEAT 5] Response (SOAR, human-gated for OT)")
+    hist = mod.historical()
+    print()
+    print(f"   {'':22} {'Min-cut':<16} {'Historical / naive'}")
+    print(f"   {'Actions':22} {len(p.actions):<16} {hist['decision'][:40]}")
+    print(f"   {'Disruption':22} {p.availability_cost:<16.1f} "
+          f"{p.baseline_availability_cost:.1f}")
+    kept = "YES" if p.cascade_averted or not hist["severs_protected"] else "see plan"
+    print(f"   {'Protected load kept':22} {kept:<16} "
+          f"{'NO' if hist['severs_protected'] else 'n/a'}")
+    if p.greedy_availability_cost > p.availability_cost:
+        print(f"   greedy isolate-frontier would cost {p.greedy_availability_cost:.1f}")
+
+    print("\n[BEAT 5] Response")
     for e in result.executions:
-        status = "EXECUTED" if e.executed else "GATED/held"
+        if e.pending:
+            status = "PENDING"
+        elif e.executed:
+            status = "EXECUTED"
+        else:
+            status = "HELD"
         who = f" by {e.approved_by}" if e.approved_by else ""
         print(f"   {status:<11} {e.action.action_type.value} "
-              f"-> {e.action.target}{who}")
-    print(f"   MTTD (events to first detect): {result.mttd_steps}   "
-          f"MTTR (actions to contain): {result.mttr_steps}")
+              f"-> {format_target(e.action.target)}{who}")
+    mttd = result.mttd_steps if result.mttd_steps is not None else "none"
+    print(f"   MTTD (events to first detect): {mttd}   "
+          f"MTTR (actions executed): {result.mttr_steps}")
 
     print("\n[BEAT 6a] CERT-In 6-hour report (auto-draft)")
-    for line in result.certin_report.splitlines()[:8]:
+    for line in result.certin_report.splitlines()[:10]:
         print("   " + line)
-    print("   ... (full report available via API)")
+    print("   ...")
 
     print("\n[BEAT 6b] Audit trail")
     print(f"   {len(orch.audit.records)} records, chain verified: "
           f"{result.audit_ok}")
 
     print("\n" + _rule("="))
-    verdict = (p.crown_jewel_protected and p.cascade_averted and result.audit_ok)
-    msg = "CONTAINED, cascade averted, fully audited" if verdict else "see logs"
+    pending = any(e.pending for e in result.executions)
+    if pending:
+        msg = "PLAN READY, OT actions pending human approval (--hitl)"
+        ok = result.audit_ok and bool(p.actions)
+    else:
+        ok = bool(p.crown_jewel_protected and result.audit_ok)
+        msg = "CONTAINED, cascade considered, audited" if ok else "see logs"
     print(f" RESULT: {msg}")
     print(_rule("="))
-    return 0 if verdict else 1
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

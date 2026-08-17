@@ -26,6 +26,7 @@ def result_to_dict(result: PipelineResult, orch: Orchestrator) -> dict[str, Any]
             ),
             "availability_cost": p.availability_cost,
             "baseline_availability_cost": p.baseline_availability_cost,
+            "greedy_availability_cost": p.greedy_availability_cost,
             "crown_jewel_protected": p.crown_jewel_protected,
             "cascade_averted": p.cascade_averted,
             "notes": p.notes,

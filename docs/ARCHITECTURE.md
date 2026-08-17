@@ -40,9 +40,12 @@ the audit fail-safe.
 
 **Deterministic core, LLM at the edges.** Detection, interdiction, blast-radius
 scoring and audit are deterministic (ML models + graph algorithms + hashing).
-The LLM (in production) is confined to attribution reasoning and natural-language
-rationale, behind an interface. This keeps the safety-critical path reproducible
-and testable, and avoids putting a stochastic model in charge of actuation.
+The LLM is a **read-only analyst copilot**: it explains an already-computed
+incident using retrieved ATT&CK/CVE/CERT-In context. It never selects, approves,
+or executes containment actions, and its output is never fed back into the
+orchestrator. Attribution itself is a deterministic ATT&CK lookup (graph-first,
+offline fallback) — not an LLM. This keeps the safety-critical path
+reproducible and testable.
 
 **The tool/response layer is the only thing that touches the environment.** No
 agent acts except by emitting a `ContainmentAction` the orchestrator has logged
@@ -50,9 +53,10 @@ and (if required) a human has approved. This single choke-point is what makes
 the system auditable.
 
 **Adapters isolate the environment.** Detection consumes `TelemetryEvent`s and
-response emits actions through an adapter interface. Swap the scenario adapter
-for `CybORGAdapter` (closed-loop), `ReplayAdapter` (OpTC/HAI replay), or a
-stubbed `RealAdapter` (never wired live for research).
+response emits actions through an adapter interface. The shipped adapters are
+`ScenarioAdapter` (bundled case library) and `ReplayAdapter` (bring-your-own
+events on a bundled topology). `CybORGAdapter` (closed-loop) and a live
+`RealAdapter` are **roadmap**, not shipped — see [`ROADMAP.md`](ROADMAP.md).
 
 ## The interdiction formulation (summary)
 

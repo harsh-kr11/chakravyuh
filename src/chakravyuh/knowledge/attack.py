@@ -22,7 +22,10 @@ TECHNIQUES: dict[str, Technique] = {
     "T1021": Technique("T1021", "Remote Services", "Lateral Movement"),
     "T1210": Technique("T1210", "Exploitation of Remote Services", "Lateral Movement"),
     "T1003": Technique("T1003", "OS Credential Dumping", "Credential Access"),
-    "T1071": Technique("T1071", "Application Layer Protocol", "Command and Control"),
+    "T1566": Technique("T1566", "Phishing", "Initial Access"),
+    "T1133": Technique("T1133", "External Remote Services", "Initial Access"),
+    "T1486": Technique("T1486", "Data Encrypted for Impact", "Impact"),
+    "T1489": Technique("T1489", "Service Stop", "Impact"),
     # ATT&CK for ICS
     "T0812": Technique("T0812", "Default Credentials", "Lateral Movement (ICS)"),
     "T0855": Technique(

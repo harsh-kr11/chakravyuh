@@ -158,6 +158,27 @@ Anyone integrating against this API should check `crown_jewel_protected_now`
 / `cascade_averted_now`, not the plan-level fields, if they want to know
 "is it actually safe right now."
 
+## 5b. CLI vs API (same product, different defaults)
+
+The API default is the real HITL path: `mode=respond` uses `pending_approval`,
+so OT / high-blast actions sit pending until `POST /incidents/{id}/approve`.
+
+The narrated CLI (`python -m chakravyuh.demo` / `chakravyuh demo`) defaults to
+`auto_approve` so a one-shot walkthrough can finish without a second process.
+That is a **demo convenience**, not production policy. Pass `--hitl` to
+construct `Orchestrator(gate=pending_approval)` and leave gated actions
+pending. `--hitl` is **not** observe-only: ungated (low-risk) actions still
+execute; only OT / high-blast actions wait.
+
+| Surface | Default gate | OT / high-blast |
+|---|---|---|
+| API `mode=respond` | `pending_approval` | waits for Approve |
+| API `mode=observe` | n/a (nothing executes) | never runs |
+| CLI `demo` | `auto_approve` | executes in the narration |
+| CLI `demo --hitl` | `pending_approval` | stays pending |
+
+There is still no silent “fully autonomous OT” mode on the API.
+
 ### What if the connector itself fails (not a human decision)?
 
 Handled distinctly from a denial: if a human approves but the connector
@@ -169,7 +190,7 @@ failure and a human "no" are different things and are never conflated.
 
 **The "observe" flow (analyze → detect → attribute → report) is complete
 and solid.** Real trained model, real graph algorithm, real audit chain,
-real persistence, tested (68 tests) and live-verified end to end, including
+real persistence, tested and live-verified end to end, including
 through the dashboard.
 
 **The HITL/action flow is functionally real and tested**, not a mockup —
@@ -192,10 +213,9 @@ infrastructure:**
   real deployment.
 - **SQLite** is fine for one instance; move to Postgres if more than one
   process needs to write concurrently.
-- **The attack-graph topology is still the bundled demo network.** You can
-  feed in your own real events (`docs/INTEGRATION.md`), but the asset
-  graph itself (which nodes exist, how they connect) isn't yet something
-  you can upload — it's still the fixed demo topology.
+- **The attack-graph topology is still a bundled case**, not an uploaded
+  customer graph. The picker has five topologies (`docs/CASES.md`). You can
+  feed in your own events (`docs/INTEGRATION.md`) onto one of those graphs.
 
 None of these are secret — they're the same boundaries called out in
 `SECURITY.md` and `README.md`. This document exists so they're in one place,

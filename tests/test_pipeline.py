@@ -127,6 +127,8 @@ def test_observe_only_mode_executes_nothing():
     assert result.audit_ok is True
     observed = [r for r in orch.audit.records if r.event_type == "action_observed_only"]
     assert len(observed) == len(result.plan.actions)
+    assert "PROPOSED" in result.certin_report
+    assert "HELD / DENIED" not in result.certin_report
 
 
 def test_pending_gate_leaves_gated_actions_unresolved():

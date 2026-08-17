@@ -45,11 +45,27 @@ cd chakravyuh
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,api]"
 
-python -m chakravyuh.demo     # narrated cross-sector demo — zero config
+python -m chakravyuh.demo                      # RedEcho illustration (default)
+python -m chakravyuh.demo --scenario colonial  # must-ship reconstruction
+python -m chakravyuh.demo --hitl               # ungated actions run; OT stays pending
 pytest                        # full test-suite
 ```
 
 You should see the pipeline detect a low-and-slow intrusion, attribute it to ATT&CK techniques, flag the cross-sector cascade risk, compute a **2-action minimal cut** that blocks the attacker while preserving the hospital load (disruption **3.0 vs a naive baseline's 108.0**), execute it with OT actions human-gated, and verify the audit chain.
+
+## Case library
+
+Five cases run **in the engine** (picker on the dashboard, `--scenario` on the CLI). They are public-source reconstructions plus one synthetic illustration — not live victim telemetry.
+
+| id | Kind | What the cut is arguing |
+|---|---|---|
+| `redecho` | synthetic illustration | Grid IT → OT; hospital power is protected. **3.0 vs naive 108.0.** Inspired by MITRE C0043; **not** a replay of Mumbai 2020 (C0043 did not reach OT). |
+| `colonial` | reconstruction | DarkSide was IT-only; operators halted 5,500 miles of OT. Finite cut keeps fuel delivery uncut. |
+| `synnovis` | reconstruction | Lab → ICU blood-result path is a protected edge. Never isolate the LIS in a way that severs it. |
+| `ukraine2015` | reconstruction | MITRE C0028. Cut upstream of the HMI, not the breaker circuit. |
+| `aiims` | reconstruction | Isolate the alerting eHospital island. The five hosts were **already encrypted** — this engine does not decrypt. |
+
+Sources and disclaimers for each case: [`docs/CASES.md`](docs/CASES.md).
 
 ### Tier 1 — the REST API + live dashboard
 
@@ -71,7 +87,7 @@ Open the dashboard, click **Run interdiction**, and it drives the same pipeline 
 
 ```bash
 cp .env.example .env          # then fill in GEMINI_API_KEY (or leave LLM off)
-docker compose up -d neo4j    # real ATT&CK / CVE / advisory graph on :7474/:7687
+docker compose --profile full up -d neo4j    # real ATT&CK / CVE / advisory graph on :7474/:7687
 chakravyuh serve              # picks up .env automatically
 ```
 
@@ -96,7 +112,8 @@ Approving a pending action carries it out via a pluggable **connector** (`chakra
 ### Everything in containers
 
 ```bash
-docker compose up --build     # neo4j :7474/:7687 + api :8080 + dashboard :8081
+docker compose up --build     # api :8080 + dashboard :8081 (default)
+docker compose --profile full up --build   # also Neo4j :7474/:7687
 ```
 
 **Zero config, zero keys, fully offline at its core.** Tier 0 needs nothing. Tiers 1–2 are additive — no capability requires them.
@@ -126,6 +143,7 @@ docker compose up --build     # neo4j :7474/:7687 + api :8080 + dashboard :8081
 | CLI (`demo` / `analyze` / `serve`) | `chakravyuh.cli` | ✅ |
 | Optional LLM rationale (never in safety path) | `chakravyuh.llm` | ✅ interface / 🔌 keys optional |
 | Command-centre dashboard (chakravyuh map) | `dashboard/` | ✅ |
+| Case library (5 runnable scenarios) | `chakravyuh.scenarios` | ✅ |
 | OpTC / HAI / CybORG dataset wiring | `chakravyuh.adapters` | 🛣️ roadmap |
 
 ## How it maps to the hackathon brief (Topic 7)
@@ -147,7 +165,7 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md). Done: the Neo4j ATT&CK/CVE/CERT-In-adv
 
 This project is designed as **one build with three payoffs** — a working system, a research paper (novel online cross-sector interdiction formulation + benchmark), and a patent-eligible mechanism. If you use it academically, please cite it — see [`CITATION.cff`](CITATION.cff). Prior-art positioning and the exact delta are documented in [`docs/NOVELTY.md`](docs/NOVELTY.md).
 
-> ⚠️ **Safety & scope.** Autonomous actuation on OT is dangerous. CHAKRAVYUH **human-gates** all OT and high-blast-radius actions by design. The shipped scenario is a **synthetic simulation**; the RedEcho→Mumbai-outage link is explicitly unsubstantiated and is *not* claimed here. Do not connect the `RealAdapter` to production without a qualified OT-safety review.
+> ⚠️ **Safety & scope.** Autonomous actuation on OT is dangerous. CHAKRAVYUH **human-gates** all OT and high-blast-radius actions by design. Bundled cases are **public-source reconstructions or a synthetic illustration**, not live victim telemetry; the RedEcho→Mumbai-outage link is explicitly unsubstantiated and is *not* claimed here. Do not connect the `RealAdapter` to production without a qualified OT-safety review.
 
 ## License
 

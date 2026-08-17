@@ -28,6 +28,26 @@ from ..schemas import (
 CROWN_JEWEL = "ot_scada_server"
 HOSPITAL_LOAD = "hospital_power_load"
 
+META = {
+    "id": "redecho",
+    "title": "RedEcho — Indian power pre-positioning",
+    "kind": "synthetic_illustration",
+    "sector": "power",
+    "one_liner": (
+        "Grid IT to OT with a hospital power dependency. Inspired by MITRE C0043; "
+        "not a replay of Mumbai 2020."
+    ),
+    "sources": [
+        "https://attack.mitre.org/campaigns/C0043/",
+        "https://attack.mitre.org/groups/G1042/",
+    ],
+    "disclaimer": (
+        "Synthetic illustration inspired by public RedEcho / C0043 reporting. "
+        "Not victim telemetry. MITRE records no OT access. The Mumbai October 2020 "
+        "outage is not claimed as a cyber effect."
+    ),
+}
+
 
 def build_graph() -> AttackGraph:
     ag = AttackGraph()
@@ -158,3 +178,18 @@ def telemetry_stream() -> list[TelemetryEvent]:
             is_malicious=True, technique_hint=technique,
         ))
     return events
+
+
+def historical() -> dict:
+    from ..graph.interdiction import naive_containment_cost
+
+    _, cost, severs = naive_containment_cost(build_graph(), CROWN_JEWEL)
+    return {
+        "decision": "Isolate the SCADA neighbourhood (panic / playbook default)",
+        "availability_cost": cost,
+        "severs_protected": severs,
+        "narrative": (
+            "A naive isolate-the-crown-jewel move severs the hospital power "
+            "dependency. CHAKRAVYUH cuts upstream instead."
+        ),
+    }
